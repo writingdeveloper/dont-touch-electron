@@ -1,36 +1,96 @@
-import { useState } from 'react'
-import UpdateElectron from '@/components/update'
-import logoVite from './assets/logo-vite.svg'
-import logoElectron from './assets/logo-electron.svg'
+import { useRef, useState, useEffect, useCallback } from 'react'
+import { useCamera } from './hooks/useCamera'
+import { useDetection } from './hooks/useDetection'
+import { VideoPreview } from './components/VideoPreview'
+import { StatusBar } from './components/StatusBar'
+import { Controls } from './components/Controls'
+import { AlertOverlay } from './components/AlertOverlay'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
-  return (
-    <div className='App'>
-      <div className='logo-box'>
-        <a href='https://github.com/electron-vite/electron-vite-react' target='_blank'>
-          <img src={logoVite} className='logo vite' alt='Electron + Vite logo' />
-          <img src={logoElectron} className='logo electron' alt='Electron + Vite logo' />
-        </a>
-      </div>
-      <h1>Electron + Vite + React</h1>
-      <div className='card'>
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className='read-the-docs'>
-        Click on the Electron + Vite logo to learn more
-      </p>
-      <div className='flex-center'>
-        Place static files into the<code>/public</code> folder <img style={{ width: '5em' }} src='./node.svg' alt='Node logo' />
-      </div>
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const [showAlert, setShowAlert] = useState(false)
 
-      <UpdateElectron />
+  const { stream, error: cameraError, startCamera, stopCamera } = useCamera()
+  const { isModelLoaded, detectionState, startDetection, stopDetection } = useDetection({
+    videoRef,
+    canvasRef,
+    onAlert: handleAlert,
+  })
+
+  function handleAlert() {
+    setShowAlert(true)
+
+    // Send notification via Electron
+    if (window.ipcRenderer) {
+      new Notification("Don't Touch!", {
+        body: 'Your hand is near your face!',
+        icon: '/favicon.ico'
+      })
+    }
+
+    setTimeout(() => setShowAlert(false), 2000)
+  }
+
+  const handleToggle = useCallback(async () => {
+    if (isRunning) {
+      stopDetection()
+      stopCamera()
+      setIsRunning(false)
+    } else {
+      await startCamera()
+      setIsRunning(true)
+    }
+  }, [isRunning, startCamera, stopCamera, stopDetection])
+
+  // Connect video stream to video element
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream
+    }
+  }, [stream])
+
+  // Start detection when camera is running
+  useEffect(() => {
+    if (isRunning && stream && isModelLoaded) {
+      startDetection()
+    }
+  }, [isRunning, stream, isModelLoaded, startDetection])
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <h1 className="app-title">Don't Touch</h1>
+        <StatusBar
+          isModelLoaded={isModelLoaded}
+          isRunning={isRunning}
+          detectionState={detectionState}
+        />
+      </header>
+
+      <main className="app-main">
+        <VideoPreview
+          videoRef={videoRef}
+          canvasRef={canvasRef}
+          isRunning={isRunning}
+        />
+
+        {cameraError && (
+          <div className="error-message">
+            Camera Error: {cameraError}
+          </div>
+        )}
+
+        <Controls
+          isRunning={isRunning}
+          isModelLoaded={isModelLoaded}
+          onToggle={handleToggle}
+        />
+      </main>
+
+      {showAlert && <AlertOverlay />}
     </div>
   )
 }

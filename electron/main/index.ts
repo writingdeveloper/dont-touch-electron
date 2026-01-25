@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -40,22 +40,67 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
+
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
+function createTray() {
+  const iconPath = path.join(process.env.VITE_PUBLIC, 'favicon.ico')
+  const icon = nativeImage.createFromPath(iconPath)
+  tray = new Tray(icon.resize({ width: 16, height: 16 }))
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show App',
+      click: () => {
+        win?.show()
+      },
+    },
+    {
+      label: 'Start Detection',
+      click: () => {
+        win?.webContents.send('toggle-detection', true)
+        win?.show()
+      },
+    },
+    {
+      label: 'Stop Detection',
+      click: () => {
+        win?.webContents.send('toggle-detection', false)
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      },
+    },
+  ])
+
+  tray.setToolTip("Don't Touch")
+  tray.setContextMenu(contextMenu)
+
+  tray.on('click', () => {
+    win?.show()
+  })
+}
+
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: "Don't Touch",
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    width: 800,
+    height: 600,
+    minWidth: 640,
+    minHeight: 480,
     webPreferences: {
       preload,
-      // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
-      // nodeIntegration: true,
-
-      // Consider using contextBridge.exposeInMainWorld
-      // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
     },
+    show: false,
   })
 
   if (VITE_DEV_SERVER_URL) { // #298
@@ -77,15 +122,35 @@ async function createWindow() {
     return { action: 'deny' }
   })
 
+  // Show window when ready
+  win.once('ready-to-show', () => {
+    win?.show()
+  })
+
+  // Minimize to tray instead of closing
+  win.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      win?.hide()
+    }
+  })
+
   // Auto update
   update(win)
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  createTray()
+})
 
 app.on('window-all-closed', () => {
   win = null
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('second-instance', () => {
