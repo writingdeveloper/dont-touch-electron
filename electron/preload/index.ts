@@ -19,8 +19,10 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     return ipcRenderer.invoke(channel, ...omit)
   },
 
-  // You can expose other APTs you need here.
-  // ...
+  // Debug log to main process (terminal)
+  debugLog(...args: unknown[]) {
+    ipcRenderer.send('debug-log', ...args)
+  },
 })
 
 // --------- Preload scripts loading ---------

@@ -19,6 +19,16 @@ export default defineConfig(({ command }) => {
         '@': path.join(__dirname, 'src')
       },
     },
+    // Optimize dependencies for the @huggingface/transformers library
+    optimizeDeps: {
+      include: ['@huggingface/transformers'],
+      esbuildOptions: {
+        target: 'esnext',
+      },
+    },
+    build: {
+      target: 'esnext',
+    },
     plugins: [
       react(),
       electron({
@@ -29,7 +39,10 @@ export default defineConfig(({ command }) => {
             if (process.env.VSCODE_DEBUG) {
               console.log(/* For `.vscode/.debug.script.mjs` */'[startup] Electron App')
             } else {
-              args.startup()
+              // Pass env to spawn to ensure ELECTRON_RUN_AS_NODE is not set
+              const env = { ...process.env }
+              delete env.ELECTRON_RUN_AS_NODE // Remove the env variable completely
+              args.startup(['.', '--no-sandbox'], { env })
             }
           },
           vite: {
@@ -38,7 +51,12 @@ export default defineConfig(({ command }) => {
               minify: isBuild,
               outDir: 'dist-electron/main',
               rollupOptions: {
-                external: Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
+                // Mark electron and node builtins as external
+                external: [
+                  'electron',
+                  /^node:/,
+                  ...Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
+                ],
               },
             },
           },
@@ -53,7 +71,11 @@ export default defineConfig(({ command }) => {
               minify: isBuild,
               outDir: 'dist-electron/preload',
               rollupOptions: {
-                external: Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
+                external: [
+                  'electron',
+                  /^node:/,
+                  ...Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
+                ],
               },
             },
           },

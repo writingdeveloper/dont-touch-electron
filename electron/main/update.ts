@@ -1,14 +1,47 @@
 import { app, ipcMain } from 'electron'
-import { createRequire } from 'node:module'
-import type {
-  ProgressInfo,
-  UpdateDownloadedEvent,
-  UpdateInfo,
-} from 'electron-updater'
 
-const { autoUpdater } = createRequire(import.meta.url)('electron-updater');
+// Define types locally to avoid CJS/ESM import issues
+interface ProgressInfo {
+  total: number;
+  delta: number;
+  transferred: number;
+  percent: number;
+  bytesPerSecond: number;
+}
 
-export function update(win: Electron.BrowserWindow) {
+interface UpdateInfo {
+  version: string;
+  releaseDate?: string;
+  releaseName?: string;
+  releaseNotes?: string;
+}
+
+interface UpdateDownloadedEvent {
+  downloadedFile: string;
+  version: string;
+}
+
+// Import autoUpdater - use dynamic import to avoid CJS/ESM issues
+let autoUpdater: any = null;
+
+async function initAutoUpdater() {
+  try {
+    const module = await import('electron-updater');
+    autoUpdater = module.autoUpdater;
+    return true;
+  } catch (e) {
+    console.log('electron-updater not available:', e);
+    return false;
+  }
+}
+
+export async function update(win: Electron.BrowserWindow) {
+  // Initialize autoUpdater
+  const initialized = await initAutoUpdater();
+  if (!initialized || !autoUpdater) {
+    console.log('Auto-updater not available');
+    return;
+  }
 
   // When set to false, the update download will be triggered through the API
   autoUpdater.autoDownload = false
