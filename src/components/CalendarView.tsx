@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
-import { DailyStats, HabitSettings } from '../types/statistics'
+import { DailyStats, HabitSettings, dateToLocalString } from '../types/statistics'
 
 interface CalendarViewProps {
   getMonthlyStats: (year: number, month: number) => Map<string, DailyStats>
@@ -52,10 +52,10 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
     }
 
     // Add days of the month
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = dateToLocalString(today)
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = dateToLocalString(date)
       const stats = monthlyStats.get(dateStr) || null
       const isToday = dateStr === todayStr
       const isFuture = dateStr > todayStr
@@ -93,7 +93,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
   const goToToday = () => {
     setCurrentYear(today.getFullYear())
     setCurrentMonth(today.getMonth())
-    setSelectedDate(today.toISOString().split('T')[0])
+    setSelectedDate(dateToLocalString(today))
   }
 
   // Get status color based on touch count vs goal

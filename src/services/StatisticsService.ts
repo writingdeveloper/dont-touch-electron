@@ -9,6 +9,8 @@ import {
   DEFAULT_PROGRESS,
   createEmptyDailyStats,
   getTodayDateString,
+  timestampToLocalDateString,
+  dateToLocalString,
   generateId,
 } from '../types/statistics'
 import { DetectionZone } from '../detection/types'
@@ -73,7 +75,7 @@ class StatisticsServiceClass {
 
     // Check if we have events from previous days
     const oldEvents = this.state.todayEvents.filter(e => {
-      const eventDate = new Date(e.timestamp).toISOString().split('T')[0]
+      const eventDate = timestampToLocalDateString(e.timestamp)
       return eventDate !== today
     })
 
@@ -82,7 +84,7 @@ class StatisticsServiceClass {
       const eventsByDate = new Map<string, TouchEvent[]>()
 
       for (const event of oldEvents) {
-        const eventDate = new Date(event.timestamp).toISOString().split('T')[0]
+        const eventDate = timestampToLocalDateString(event.timestamp)
         if (!eventsByDate.has(eventDate)) {
           eventsByDate.set(eventDate, [])
         }
@@ -96,7 +98,7 @@ class StatisticsServiceClass {
 
       // Keep only today's events
       this.state.todayEvents = this.state.todayEvents.filter(e => {
-        const eventDate = new Date(e.timestamp).toISOString().split('T')[0]
+        const eventDate = timestampToLocalDateString(e.timestamp)
         return eventDate === today
       })
 
@@ -274,7 +276,7 @@ class StatisticsServiceClass {
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = dateToLocalString(date)
 
       if (i === 0) {
         // Today - use live stats
@@ -300,7 +302,7 @@ class StatisticsServiceClass {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = dateToLocalString(date)
 
       if (dateStr === today) {
         // Today - use live stats
