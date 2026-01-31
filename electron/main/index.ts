@@ -140,7 +140,7 @@ function updateTrayMenu(lang: TrayLang) {
 }
 
 function createTray() {
-  const iconPath = path.join(process.env.VITE_PUBLIC, 'favicon.ico')
+  const iconPath = path.join(process.env.VITE_PUBLIC, 'icon.ico')
   const icon = nativeImage.createFromPath(iconPath)
   tray = new Tray(icon.resize({ width: 16, height: 16 }))
 
@@ -202,7 +202,7 @@ function createAlertWindow() {
 async function createWindow() {
   win = new BrowserWindow({
     title: "Don't Touch",
-    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
     width: 850,
     height: 680,
     minWidth: 700,
