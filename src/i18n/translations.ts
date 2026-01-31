@@ -203,6 +203,20 @@ export interface Translations {
   aboutCompliance: string;
   aboutOpenSource: string;
   aboutOpenSourceText: string;
+
+  // Update
+  updateTitle: string;
+  updateCheck: string;
+  updateChecking: string;
+  updateAvailable: string;
+  updateNotAvailable: string;
+  updateDownload: string;
+  updateDownloading: string;
+  updateInstall: string;
+  updateLater: string;
+  updateError: string;
+  updateCurrent: string;
+  updateNew: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -399,6 +413,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: 'Compliant with GDPR (EU), CCPA (California), and PIPEDA (Canada) privacy regulations.',
     aboutOpenSource: 'Open Source',
     aboutOpenSourceText: 'This project is open source. View the source code, report issues, or contribute on GitHub.',
+
+    // Update
+    updateTitle: 'Software Update',
+    updateCheck: 'Check for Updates',
+    updateChecking: 'Checking...',
+    updateAvailable: 'Update Available',
+    updateNotAvailable: 'You are up to date!',
+    updateDownload: 'Download',
+    updateDownloading: 'Downloading...',
+    updateInstall: 'Install Now',
+    updateLater: 'Later',
+    updateError: 'Update check failed',
+    updateCurrent: 'Current',
+    updateNew: 'New',
   },
 
   ko: {
@@ -594,6 +622,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: 'GDPR(유럽), CCPA(캘리포니아), PIPEDA(캐나다) 개인정보보호 규정을 준수합니다.',
     aboutOpenSource: '오픈 소스',
     aboutOpenSourceText: '이 프로젝트는 오픈 소스입니다. GitHub에서 소스 코드를 확인하거나, 이슈를 보고하거나, 기여할 수 있습니다.',
+
+    // Update
+    updateTitle: '소프트웨어 업데이트',
+    updateCheck: '업데이트 확인',
+    updateChecking: '확인 중...',
+    updateAvailable: '업데이트 가능',
+    updateNotAvailable: '최신 버전입니다!',
+    updateDownload: '다운로드',
+    updateDownloading: '다운로드 중...',
+    updateInstall: '지금 설치',
+    updateLater: '나중에',
+    updateError: '업데이트 확인 실패',
+    updateCurrent: '현재',
+    updateNew: '최신',
   },
 
   ja: {
@@ -789,6 +831,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: 'GDPR（EU）、CCPA（カリフォルニア）、PIPEDA（カナダ）のプライバシー規制に準拠しています。',
     aboutOpenSource: 'オープンソース',
     aboutOpenSourceText: 'このプロジェクトはオープンソースです。GitHubでソースコードの閲覧、問題の報告、貢献ができます。',
+
+    // Update
+    updateTitle: 'ソフトウェアアップデート',
+    updateCheck: 'アップデートを確認',
+    updateChecking: '確認中...',
+    updateAvailable: 'アップデート可能',
+    updateNotAvailable: '最新版です！',
+    updateDownload: 'ダウンロード',
+    updateDownloading: 'ダウンロード中...',
+    updateInstall: '今すぐインストール',
+    updateLater: '後で',
+    updateError: 'アップデート確認失敗',
+    updateCurrent: '現在',
+    updateNew: '最新',
   },
 
   zh: {
@@ -984,6 +1040,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: '符合GDPR（欧盟）、CCPA（加利福尼亚）和PIPEDA（加拿大）隐私法规。',
     aboutOpenSource: '开源项目',
     aboutOpenSourceText: '本项目是开源的。您可以在GitHub上查看源代码、报告问题或参与贡献。',
+
+    // Update
+    updateTitle: '软件更新',
+    updateCheck: '检查更新',
+    updateChecking: '检查中...',
+    updateAvailable: '有可用更新',
+    updateNotAvailable: '已是最新版本！',
+    updateDownload: '下载',
+    updateDownloading: '下载中...',
+    updateInstall: '立即安装',
+    updateLater: '稍后',
+    updateError: '检查更新失败',
+    updateCurrent: '当前',
+    updateNew: '最新',
   },
 
   es: {
@@ -1179,6 +1249,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: 'Cumple con las regulaciones de privacidad GDPR (UE), CCPA (California) y PIPEDA (Canadá).',
     aboutOpenSource: 'Código Abierto',
     aboutOpenSourceText: 'Este proyecto es de código abierto. Vea el código fuente, reporte problemas o contribuya en GitHub.',
+
+    // Update
+    updateTitle: 'Actualización de Software',
+    updateCheck: 'Buscar Actualizaciones',
+    updateChecking: 'Buscando...',
+    updateAvailable: 'Actualización Disponible',
+    updateNotAvailable: '¡Está actualizado!',
+    updateDownload: 'Descargar',
+    updateDownloading: 'Descargando...',
+    updateInstall: 'Instalar Ahora',
+    updateLater: 'Más Tarde',
+    updateError: 'Error al buscar actualizaciones',
+    updateCurrent: 'Actual',
+    updateNew: 'Nuevo',
   },
 
   ru: {
@@ -1374,6 +1458,20 @@ export const translations: Record<Language, Translations> = {
     aboutCompliance: 'Соответствует требованиям GDPR (ЕС), CCPA (Калифорния) и PIPEDA (Канада) о защите персональных данных.',
     aboutOpenSource: 'Открытый исходный код',
     aboutOpenSourceText: 'Этот проект с открытым исходным кодом. Просматривайте код, сообщайте о проблемах или вносите свой вклад на GitHub.',
+
+    // Update
+    updateTitle: 'Обновление ПО',
+    updateCheck: 'Проверить обновления',
+    updateChecking: 'Проверка...',
+    updateAvailable: 'Доступно обновление',
+    updateNotAvailable: 'У вас последняя версия!',
+    updateDownload: 'Скачать',
+    updateDownloading: 'Скачивание...',
+    updateInstall: 'Установить сейчас',
+    updateLater: 'Позже',
+    updateError: 'Ошибка проверки обновлений',
+    updateCurrent: 'Текущая',
+    updateNew: 'Новая',
   },
 };
 
