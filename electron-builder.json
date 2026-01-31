@@ -25,6 +25,7 @@
     }
   ],
   "mac": {
+    "icon": "public/icon.png",
     "artifactName": "${productName}_${version}.${ext}",
     "target": [
       "dmg",
@@ -51,6 +52,7 @@
     "shortcutName": "Don't Touch"
   },
   "linux": {
+    "icon": "public/icon.png",
     "target": ["AppImage", "deb"],
     "category": "Utility"
   }
