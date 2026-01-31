@@ -1,6 +1,6 @@
 {
   "name": "dont-touch-electron",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist-electron/main/index.js",
   "description": "Face-touch detection app for habit improvement using MediaPipe",
   "author": "writingdeveloper",
