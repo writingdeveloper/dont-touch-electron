@@ -370,6 +370,19 @@ ipcMain.handle('window-close', () => {
   return true
 })
 
+// Window hide (minimize to tray)
+ipcMain.handle('window-hide', () => {
+  win?.hide()
+  return true
+})
+
+// Window quit (close app)
+ipcMain.handle('window-quit', () => {
+  isQuitting = true
+  app.quit()
+  return true
+})
+
 // Analytics IPC handler - track events from renderer
 ipcMain.handle('track-event', (_, eventName: string, props?: Record<string, string | number>) => {
   trackEvent(eventName, props)

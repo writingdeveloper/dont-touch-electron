@@ -165,6 +165,29 @@ export interface Translations {
   buttonMinimize: string;
   buttonClose: string;
 
+  // Camera Preview
+  settingsHidePreview: string;
+  settingsHidePreviewHint: string;
+
+  // Close Modal
+  closeModalTitle: string;
+  closeModalQuit: string;
+  closeModalTray: string;
+  closeModalCancel: string;
+  closeModalRemember: string;
+  settingsCloseAction: string;
+  settingsCloseActionAsk: string;
+  settingsCloseActionHint: string;
+
+  // Splash Screen
+  splashCheckingUpdates: string;
+  splashLoadingResources: string;
+  splashInitializingDetection: string;
+  splashPreparingInterface: string;
+  splashAlmostReady: string;
+  splashComplete: string;
+  splashLoading: string;
+
   // About
   aboutDescription: string;
   aboutFeatures: string;
@@ -338,6 +361,29 @@ export const translations: Record<Language, Translations> = {
     buttonMinimize: 'Minimize to tray',
     buttonClose: 'Close',
 
+    // Camera Preview
+    settingsHidePreview: 'Hide camera preview',
+    settingsHidePreviewHint: 'Save resources by hiding the video feed (detection still works)',
+
+    // Close Modal
+    closeModalTitle: 'Close Application',
+    closeModalQuit: 'Quit',
+    closeModalTray: 'Minimize to Tray',
+    closeModalCancel: 'Cancel',
+    closeModalRemember: 'Remember my choice',
+    settingsCloseAction: 'Close action',
+    settingsCloseActionAsk: 'Ask every time',
+    settingsCloseActionHint: 'Reset to ask before closing',
+
+    // Splash Screen
+    splashCheckingUpdates: 'Checking for updates...',
+    splashLoadingResources: 'Loading resources...',
+    splashInitializingDetection: 'Initializing detection model...',
+    splashPreparingInterface: 'Preparing interface...',
+    splashAlmostReady: 'Almost ready...',
+    splashComplete: 'Complete!',
+    splashLoading: 'Loading...',
+
     // About
     aboutDescription: 'An app to help break face-touching habits like hair pulling or skin picking through real-time detection.',
     aboutFeatures: 'Features',
@@ -509,6 +555,29 @@ export const translations: Record<Language, Translations> = {
     buttonAbout: '정보',
     buttonMinimize: '트레이로 최소화',
     buttonClose: '닫기',
+
+    // Camera Preview
+    settingsHidePreview: '카메라 미리보기 숨기기',
+    settingsHidePreviewHint: '영상 표시를 숨겨 리소스 절약 (감지는 계속 동작)',
+
+    // Close Modal
+    closeModalTitle: '앱 닫기',
+    closeModalQuit: '종료',
+    closeModalTray: '트레이로 최소화',
+    closeModalCancel: '취소',
+    closeModalRemember: '이 선택 기억하기',
+    settingsCloseAction: '닫기 동작',
+    settingsCloseActionAsk: '매번 묻기',
+    settingsCloseActionHint: '닫기 전 매번 확인하도록 초기화',
+
+    // Splash Screen
+    splashCheckingUpdates: '업데이트 확인 중...',
+    splashLoadingResources: '리소스 로딩 중...',
+    splashInitializingDetection: '감지 모델 초기화 중...',
+    splashPreparingInterface: '인터페이스 준비 중...',
+    splashAlmostReady: '거의 완료...',
+    splashComplete: '완료!',
+    splashLoading: '로딩 중...',
 
     // About
     aboutDescription: '실시간 감지를 통해 발모벽, 피부뜯기 등의 얼굴 터치 습관을 개선하는 앱입니다.',
@@ -682,6 +751,29 @@ export const translations: Record<Language, Translations> = {
     buttonMinimize: 'トレイに最小化',
     buttonClose: '閉じる',
 
+    // Camera Preview
+    settingsHidePreview: 'カメラプレビューを非表示',
+    settingsHidePreviewHint: 'リソース節約のため映像表示を非表示（検出は継続）',
+
+    // Close Modal
+    closeModalTitle: 'アプリを閉じる',
+    closeModalQuit: '終了',
+    closeModalTray: 'トレイに最小化',
+    closeModalCancel: 'キャンセル',
+    closeModalRemember: 'この選択を記憶する',
+    settingsCloseAction: '閉じる動作',
+    settingsCloseActionAsk: '毎回確認',
+    settingsCloseActionHint: '閉じる前に毎回確認するように戻す',
+
+    // Splash Screen
+    splashCheckingUpdates: 'アップデートを確認中...',
+    splashLoadingResources: 'リソースを読み込み中...',
+    splashInitializingDetection: '検出モデルを初期化中...',
+    splashPreparingInterface: 'インターフェースを準備中...',
+    splashAlmostReady: 'もうすぐ完了...',
+    splashComplete: '完了！',
+    splashLoading: '読み込み中...',
+
     // About
     aboutDescription: 'リアルタイム検出により、抜毛症や皮膚むしりなどの顔を触る習慣を改善するアプリです。',
     aboutFeatures: '主な機能',
@@ -853,6 +945,29 @@ export const translations: Record<Language, Translations> = {
     buttonAbout: '关于',
     buttonMinimize: '最小化到托盘',
     buttonClose: '关闭',
+
+    // Camera Preview
+    settingsHidePreview: '隐藏摄像头预览',
+    settingsHidePreviewHint: '隐藏视频画面以节省资源（检测仍在运行）',
+
+    // Close Modal
+    closeModalTitle: '关闭应用',
+    closeModalQuit: '退出',
+    closeModalTray: '最小化到托盘',
+    closeModalCancel: '取消',
+    closeModalRemember: '记住我的选择',
+    settingsCloseAction: '关闭动作',
+    settingsCloseActionAsk: '每次询问',
+    settingsCloseActionHint: '关闭前每次询问',
+
+    // Splash Screen
+    splashCheckingUpdates: '正在检查更新...',
+    splashLoadingResources: '正在加载资源...',
+    splashInitializingDetection: '正在初始化检测模型...',
+    splashPreparingInterface: '正在准备界面...',
+    splashAlmostReady: '即将完成...',
+    splashComplete: '完成！',
+    splashLoading: '加载中...',
 
     // About
     aboutDescription: '通过实时检测帮助改善拔毛症、抠皮等触摸面部的习惯。',
@@ -1026,6 +1141,29 @@ export const translations: Record<Language, Translations> = {
     buttonMinimize: 'Minimizar a bandeja',
     buttonClose: 'Cerrar',
 
+    // Camera Preview
+    settingsHidePreview: 'Ocultar vista previa de cámara',
+    settingsHidePreviewHint: 'Ahorra recursos ocultando el video (la detección sigue funcionando)',
+
+    // Close Modal
+    closeModalTitle: 'Cerrar Aplicación',
+    closeModalQuit: 'Salir',
+    closeModalTray: 'Minimizar a Bandeja',
+    closeModalCancel: 'Cancelar',
+    closeModalRemember: 'Recordar mi elección',
+    settingsCloseAction: 'Acción de cierre',
+    settingsCloseActionAsk: 'Preguntar siempre',
+    settingsCloseActionHint: 'Preguntar antes de cerrar cada vez',
+
+    // Splash Screen
+    splashCheckingUpdates: 'Comprobando actualizaciones...',
+    splashLoadingResources: 'Cargando recursos...',
+    splashInitializingDetection: 'Inicializando modelo de detección...',
+    splashPreparingInterface: 'Preparando interfaz...',
+    splashAlmostReady: 'Casi listo...',
+    splashComplete: '¡Completado!',
+    splashLoading: 'Cargando...',
+
     // About
     aboutDescription: 'Una app para ayudar a romper hábitos de tocarse la cara como tirarse del pelo o rascarse la piel mediante detección en tiempo real.',
     aboutFeatures: 'Características',
@@ -1197,6 +1335,29 @@ export const translations: Record<Language, Translations> = {
     buttonAbout: 'О приложении',
     buttonMinimize: 'Свернуть в трей',
     buttonClose: 'Закрыть',
+
+    // Camera Preview
+    settingsHidePreview: 'Скрыть превью камеры',
+    settingsHidePreviewHint: 'Экономия ресурсов скрытием видео (обнаружение продолжается)',
+
+    // Close Modal
+    closeModalTitle: 'Закрыть приложение',
+    closeModalQuit: 'Выйти',
+    closeModalTray: 'Свернуть в трей',
+    closeModalCancel: 'Отмена',
+    closeModalRemember: 'Запомнить мой выбор',
+    settingsCloseAction: 'Действие при закрытии',
+    settingsCloseActionAsk: 'Спрашивать каждый раз',
+    settingsCloseActionHint: 'Спрашивать перед закрытием каждый раз',
+
+    // Splash Screen
+    splashCheckingUpdates: 'Проверка обновлений...',
+    splashLoadingResources: 'Загрузка ресурсов...',
+    splashInitializingDetection: 'Инициализация модели обнаружения...',
+    splashPreparingInterface: 'Подготовка интерфейса...',
+    splashAlmostReady: 'Почти готово...',
+    splashComplete: 'Готово!',
+    splashLoading: 'Загрузка...',
 
     // About
     aboutDescription: 'Приложение для избавления от привычки касаться лица (трихотилломания, дерматилломания) с помощью обнаружения в реальном времени.',

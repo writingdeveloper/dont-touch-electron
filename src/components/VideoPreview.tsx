@@ -9,6 +9,7 @@ interface VideoPreviewProps {
   isRunning: boolean
   faceLandmarksCount?: number | null
   handsCount?: number
+  hidePreview?: boolean
 }
 
 // Map language codes to locale codes
@@ -21,7 +22,7 @@ const languageToLocale: Record<Language, string> = {
   ru: 'ru-RU',
 }
 
-export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCount = null, handsCount = 0 }: VideoPreviewProps) {
+export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCount = null, handsCount = 0, hidePreview = false }: VideoPreviewProps) {
   const { t, language } = useLanguage()
   const [currentTime, setCurrentTime] = useState('')
 
@@ -69,14 +70,30 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
         playsInline
         muted
         className={`video-preview ${isRunning ? 'active' : ''}`}
+        style={hidePreview && isRunning ? { opacity: 0, position: 'absolute', pointerEvents: 'none' } : undefined}
       />
       <canvas
         ref={canvasRef as React.RefObject<HTMLCanvasElement>}
         className="detection-overlay"
+        style={hidePreview && isRunning ? { opacity: 0, position: 'absolute', pointerEvents: 'none' } : undefined}
       />
 
+      {/* Hidden preview indicator */}
+      {hidePreview && isRunning && (
+        <div className="hidden-preview-indicator">
+          <div className="hidden-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          </div>
+          <span className="hidden-text">{t.settingsHidePreview || 'Preview Hidden'}</span>
+          <span className="hidden-hint">{t.statusMonitoring}</span>
+        </div>
+      )}
+
       {/* Tech overlay decorations */}
-      {isRunning && (
+      {isRunning && !hidePreview && (
         <>
           <div className="corner-bracket top-left" />
           <div className="corner-bracket top-right" />
@@ -89,6 +106,15 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
             isRunning={isRunning}
           />
         </>
+      )}
+
+      {/* Detection info when preview is hidden */}
+      {isRunning && hidePreview && (
+        <DetectionOverlay
+          faceLandmarksCount={faceLandmarksCount}
+          handsCount={handsCount}
+          isRunning={isRunning}
+        />
       )}
 
       {!isRunning && (
@@ -225,6 +251,59 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
           opacity: 0.4;
           color: #888;
           margin: 0;
+        }
+
+        .hidden-preview-indicator {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%);
+          z-index: 10;
+        }
+
+        .hidden-icon {
+          margin-bottom: 16px;
+          color: #00ffff;
+          opacity: 0.5;
+        }
+
+        .hidden-text {
+          font-size: 16px;
+          font-weight: 600;
+          color: #00ffff;
+          opacity: 0.7;
+          letter-spacing: 2px;
+          margin-bottom: 8px;
+          font-family: monospace;
+        }
+
+        .hidden-hint {
+          font-size: 12px;
+          color: #00ff88;
+          opacity: 0.6;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .hidden-hint::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          background: #00ff88;
+          border-radius: 50%;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.2); }
         }
       `}</style>
     </div>
