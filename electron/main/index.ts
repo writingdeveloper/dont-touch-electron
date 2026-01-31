@@ -4,6 +4,12 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { update } from './update'
+import { initialize as initAptabase, trackEvent } from '@aptabase/electron/main'
+
+// Initialize Aptabase analytics (self-hosted)
+initAptabase('A-SH-5688838680', {
+  host: 'https://aptabase.devmanage.duckdns.org'
+})
 
 // App settings interface and storage
 interface AppSettings {
@@ -339,6 +345,11 @@ ipcMain.handle('set-app-settings', (_, settings: AppSettings) => {
   return true
 })
 
+// App version IPC handler
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion()
+})
+
 // Window control IPC handlers
 ipcMain.handle('window-minimize', () => {
   if (appSettings.minimizeToTray) {
@@ -359,9 +370,16 @@ ipcMain.handle('window-close', () => {
   return true
 })
 
+// Analytics IPC handler - track events from renderer
+ipcMain.handle('track-event', (_, eventName: string, props?: Record<string, string | number>) => {
+  trackEvent(eventName, props)
+  return true
+})
+
 app.whenReady().then(() => {
   createWindow()
   createTray()
+  trackEvent('app_started')
 })
 
 app.on('window-all-closed', () => {
@@ -371,6 +389,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  trackEvent('app_closed')
 })
 
 app.on('second-instance', () => {

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 
 interface AboutModalProps {
@@ -9,6 +10,11 @@ const GITHUB_URL = 'https://github.com/writingdeveloper/dont-touch-electron'
 export function AboutModal({ onClose }: AboutModalProps) {
   const { t } = useLanguage()
   const currentYear = new Date().getFullYear()
+  const [version, setVersion] = useState('...')
+
+  useEffect(() => {
+    window.appInfo?.getVersion().then(setVersion).catch(() => setVersion('1.0.0'))
+  }, [])
 
   const openExternal = (url: string) => {
     window.ipcRenderer?.invoke('open-external', url)
@@ -22,7 +28,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
         <div className="about-header">
           <span className="about-icon">🛡️</span>
           <h2>{t.appTitle}</h2>
-          <span className="version">v1.0.0</span>
+          <span className="version">v{version}</span>
         </div>
 
         <div className="about-content">

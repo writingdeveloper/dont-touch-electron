@@ -160,6 +160,11 @@ export interface Translations {
   settingsStartMinimized: string;
   settingsStartMinimizedHint: string;
 
+  // Button titles
+  buttonAbout: string;
+  buttonMinimize: string;
+  buttonClose: string;
+
   // About
   aboutDescription: string;
   aboutFeatures: string;
@@ -328,6 +333,11 @@ export const translations: Record<Language, Translations> = {
     settingsStartMinimized: 'Start minimized',
     settingsStartMinimizedHint: 'Start in system tray',
 
+    // Button titles
+    buttonAbout: 'About',
+    buttonMinimize: 'Minimize to tray',
+    buttonClose: 'Close',
+
     // About
     aboutDescription: 'An app to help break face-touching habits like hair pulling or skin picking through real-time detection.',
     aboutFeatures: 'Features',
@@ -494,6 +504,11 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: '닫아도 시스템 트레이에서 계속 실행',
     settingsStartMinimized: '최소화 상태로 시작',
     settingsStartMinimizedHint: '시스템 트레이에서 시작',
+
+    // Button titles
+    buttonAbout: '정보',
+    buttonMinimize: '트레이로 최소화',
+    buttonClose: '닫기',
 
     // About
     aboutDescription: '실시간 감지를 통해 발모벽, 피부뜯기 등의 얼굴 터치 습관을 개선하는 앱입니다.',
@@ -662,6 +677,11 @@ export const translations: Record<Language, Translations> = {
     settingsStartMinimized: '最小化状態で起動',
     settingsStartMinimizedHint: 'システムトレイで起動',
 
+    // Button titles
+    buttonAbout: '情報',
+    buttonMinimize: 'トレイに最小化',
+    buttonClose: '閉じる',
+
     // About
     aboutDescription: 'リアルタイム検出により、抜毛症や皮膚むしりなどの顔を触る習慣を改善するアプリです。',
     aboutFeatures: '主な機能',
@@ -828,6 +848,11 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: '关闭时继续在系统托盘中运行',
     settingsStartMinimized: '启动时最小化',
     settingsStartMinimizedHint: '在系统托盘中启动',
+
+    // Button titles
+    buttonAbout: '关于',
+    buttonMinimize: '最小化到托盘',
+    buttonClose: '关闭',
 
     // About
     aboutDescription: '通过实时检测帮助改善拔毛症、抠皮等触摸面部的习惯。',
@@ -996,6 +1021,11 @@ export const translations: Record<Language, Translations> = {
     settingsStartMinimized: 'Iniciar minimizado',
     settingsStartMinimizedHint: 'Iniciar en la bandeja del sistema',
 
+    // Button titles
+    buttonAbout: 'Acerca de',
+    buttonMinimize: 'Minimizar a bandeja',
+    buttonClose: 'Cerrar',
+
     // About
     aboutDescription: 'Una app para ayudar a romper hábitos de tocarse la cara como tirarse del pelo o rascarse la piel mediante detección en tiempo real.',
     aboutFeatures: 'Características',
@@ -1162,6 +1192,11 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: 'Продолжать работу в системном трее',
     settingsStartMinimized: 'Запускать свёрнутым',
     settingsStartMinimizedHint: 'Запускать в системном трее',
+
+    // Button titles
+    buttonAbout: 'О приложении',
+    buttonMinimize: 'Свернуть в трей',
+    buttonClose: 'Закрыть',
 
     // About
     aboutDescription: 'Приложение для избавления от привычки касаться лица (трихотилломания, дерматилломания) с помощью обнаружения в реальном времени.',

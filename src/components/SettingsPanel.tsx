@@ -118,12 +118,12 @@ export function SettingsPanel({
         const data = JSON.parse(event.target?.result as string)
         const success = onImportData(data)
         if (success) {
-          alert(t.settingsImportSuccess || 'Data imported successfully!')
+          alert(t.settingsImportSuccess)
         } else {
-          alert(t.settingsImportError || 'Failed to import data')
+          alert(t.settingsImportError)
         }
       } catch {
-        alert(t.settingsImportError || 'Invalid file format')
+        alert(t.settingsImportError)
       }
     }
     reader.readAsText(file)

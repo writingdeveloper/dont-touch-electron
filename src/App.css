@@ -52,6 +52,16 @@
   color: #fff;
 }
 
+.app-version {
+  font-size: 10px;
+  font-weight: 500;
+  color: #666;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
 .status-indicator {
   display: flex;
   align-items: center;

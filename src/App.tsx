@@ -49,7 +49,12 @@ function App() {
   const [showMeditationModal, setShowMeditationModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
   const detectingStartTimeRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    window.appInfo?.getVersion().then(setAppVersion).catch(() => {})
+  }, [])
 
   const {
     stream,
@@ -217,6 +222,7 @@ function App() {
           <div className="app-logo">
             <span className="logo-icon">🛡️</span>
             <span className="logo-text">{t.appTitle}</span>
+            {appVersion && <span className="app-version">v{appVersion}</span>}
           </div>
           <div className="status-indicator" style={{ color: status.color }}>
             <span className="status-dot" style={{ background: status.color }} />
@@ -224,7 +230,7 @@ function App() {
           </div>
         </div>
         <div className="header-right">
-          <button className="header-btn" onClick={() => setShowAbout(true)} title="About">
+          <button className="header-btn" onClick={() => setShowAbout(true)} title={t.buttonAbout}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 16v-4M12 8h.01" />
@@ -246,14 +252,14 @@ function App() {
             <button
               className="window-btn minimize"
               onClick={() => window.ipcRenderer?.invoke('window-minimize')}
-              title="Minimize to tray"
+              title={t.buttonMinimize}
             >
               ─
             </button>
             <button
               className="window-btn close"
               onClick={() => window.ipcRenderer?.invoke('window-close')}
-              title="Close"
+              title={t.buttonClose}
             >
               ✕
             </button>
