@@ -20,6 +20,8 @@ interface AppSettings {
   autoStart: boolean
   minimizeToTray: boolean
   startMinimized: boolean
+  hidePreview: boolean
+  closeAction: 'ask' | 'quit' | 'tray'
 }
 
 interface SettingsPanelProps {
@@ -33,6 +35,10 @@ interface SettingsPanelProps {
   cameraDevices?: VideoDevice[]
   selectedCameraId?: string | null
   onCameraChange?: (deviceId: string | null) => void
+  hidePreview?: boolean
+  onHidePreviewChange?: (hide: boolean) => void
+  closeAction?: 'ask' | 'quit' | 'tray'
+  onCloseActionChange?: (action: 'ask' | 'quit' | 'tray') => void
 }
 
 export function SettingsPanel({
@@ -45,6 +51,10 @@ export function SettingsPanel({
   cameraDevices = [],
   selectedCameraId,
   onCameraChange,
+  hidePreview = false,
+  onHidePreviewChange,
+  closeAction = 'ask',
+  onCloseActionChange,
 }: SettingsPanelProps) {
   const { t, language, setLanguage } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
@@ -65,6 +75,8 @@ export function SettingsPanel({
       autoStart: false,
       minimizeToTray: true,
       startMinimized: false,
+      hidePreview: false,
+      closeAction: 'ask' as const,
     }
   })
 
@@ -395,6 +407,23 @@ export function SettingsPanel({
                   </select>
                 </div>
 
+                {/* Hide Camera Preview */}
+                <div className="settings-section">
+                  <label className="toggle-label">
+                    <div>
+                      <span>{t.settingsHidePreview || 'Hide camera preview'}</span>
+                      <p className="toggle-hint">{t.settingsHidePreviewHint || 'Save resources by hiding the video feed'}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={hidePreview}
+                      onChange={(e) => onHidePreviewChange?.(e.target.checked)}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-switch" />
+                  </label>
+                </div>
+
                 {/* Auto Start */}
                 <div className="settings-section">
                   <label className="toggle-label">
@@ -445,6 +474,20 @@ export function SettingsPanel({
                     <span className="toggle-switch" />
                   </label>
                 </div>
+
+                {/* Close Action Reset */}
+                {closeAction !== 'ask' && (
+                  <div className="settings-section">
+                    <h4>{t.settingsCloseAction || 'Close action'}</h4>
+                    <p className="slider-hint">{t.settingsCloseActionHint || 'Reset to ask before closing'}</p>
+                    <button
+                      className="reset-close-action-btn"
+                      onClick={() => onCloseActionChange?.('ask')}
+                    >
+                      {t.settingsCloseActionAsk || 'Ask every time'}
+                    </button>
+                  </div>
+                )}
               </>
             )}
 
@@ -874,6 +917,25 @@ export function SettingsPanel({
           font-size: 10px;
           color: #666;
           margin: 4px 0 0 0;
+        }
+
+        .reset-close-action-btn {
+          width: 100%;
+          padding: 10px 16px;
+          margin-top: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 8px;
+          color: #aaa;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .reset-close-action-btn:hover {
+          background: rgba(0, 255, 255, 0.1);
+          border-color: rgba(0, 255, 255, 0.4);
+          color: #00ffff;
         }
       `}</style>
     </div>

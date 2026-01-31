@@ -73,6 +73,7 @@ export class ProximityAnalyzer {
 
     // Check which zone (if any) a fingertip is touching
     const { isNearHead, activeZone } = this.checkZoneTouch(hands, head, faceLandmarks);
+
     this.currentIsNearHead = isNearHead;
     this.currentActiveZone = activeZone;
 

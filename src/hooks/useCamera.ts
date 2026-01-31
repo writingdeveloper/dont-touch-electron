@@ -30,13 +30,27 @@ export function useCamera(): UseCameraReturn {
     }
   })
 
-  // Enumerate video devices
+  // Enumerate video devices without requesting permission
+  // Labels will only be available after permission is granted
+  const enumerateDevicesWithoutPermission = useCallback(async () => {
+    try {
+      const allDevices = await navigator.mediaDevices.enumerateDevices()
+      const videoDevices = allDevices
+        .filter(device => device.kind === 'videoinput')
+        .map((device, index) => ({
+          deviceId: device.deviceId,
+          label: device.label || `Camera ${index + 1}`,
+        }))
+      setDevices(videoDevices)
+    } catch (err) {
+      console.error('Failed to enumerate devices:', err)
+    }
+  }, [])
+
+  // Enumerate video devices (call after permission is already granted)
+  // Does NOT request new camera permission - just lists available devices
   const refreshDevices = useCallback(async () => {
     try {
-      // Need to request permission first to get device labels
-      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true })
-      tempStream.getTracks().forEach(track => track.stop())
-
       const allDevices = await navigator.mediaDevices.enumerateDevices()
       const videoDevices = allDevices
         .filter(device => device.kind === 'videoinput')
@@ -50,10 +64,10 @@ export function useCamera(): UseCameraReturn {
     }
   }, [])
 
-  // Refresh devices on mount
+  // Only enumerate devices without permission on mount (no camera access popup)
   useEffect(() => {
-    refreshDevices()
-  }, [refreshDevices])
+    enumerateDevicesWithoutPermission()
+  }, [enumerateDevicesWithoutPermission])
 
   // Save selected device to localStorage
   const setSelectedDeviceId = useCallback((deviceId: string | null) => {

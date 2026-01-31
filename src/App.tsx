@@ -9,6 +9,7 @@ import { DailyStatsCard } from './components/DailyStatsCard'
 import { MeditationModal } from './components/MeditationModal'
 import { CalendarView } from './components/CalendarView'
 import { AboutModal } from './components/AboutModal'
+import { CloseConfirmModal } from './components/CloseConfirmModal'
 import { useLanguage } from './i18n/LanguageContext'
 import './App.css'
 
@@ -40,6 +41,22 @@ function playAlertSound() {
   })
 }
 
+interface AppSettings {
+  autoStart: boolean
+  minimizeToTray: boolean
+  startMinimized: boolean
+  hidePreview: boolean
+  closeAction: 'ask' | 'quit' | 'tray'
+}
+
+const defaultAppSettings: AppSettings = {
+  autoStart: false,
+  minimizeToTray: true,
+  startMinimized: false,
+  hidePreview: false,
+  closeAction: 'ask',
+}
+
 function App() {
   const { t, language } = useLanguage()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -49,8 +66,55 @@ function App() {
   const [showMeditationModal, setShowMeditationModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [showCloseModal, setShowCloseModal] = useState(false)
   const [appVersion, setAppVersion] = useState('')
   const detectingStartTimeRef = useRef<number | null>(null)
+
+  // App settings state
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => {
+    try {
+      const stored = localStorage.getItem('dont-touch-app-settings')
+      if (stored) {
+        return { ...defaultAppSettings, ...JSON.parse(stored) }
+      }
+    } catch {
+      // Ignore
+    }
+    return defaultAppSettings
+  })
+
+  const updateAppSettings = (newSettings: Partial<AppSettings>) => {
+    const updated = { ...appSettings, ...newSettings }
+    setAppSettings(updated)
+    try {
+      localStorage.setItem('dont-touch-app-settings', JSON.stringify(updated))
+    } catch {
+      // Ignore
+    }
+    window.ipcRenderer?.invoke('set-app-settings', updated)
+  }
+
+  const handleCloseClick = () => {
+    if (appSettings.closeAction === 'ask') {
+      setShowCloseModal(true)
+    } else if (appSettings.closeAction === 'tray') {
+      window.ipcRenderer?.invoke('window-hide')
+    } else {
+      window.ipcRenderer?.invoke('window-quit')
+    }
+  }
+
+  const handleCloseAction = (action: 'quit' | 'tray', remember: boolean) => {
+    setShowCloseModal(false)
+    if (remember) {
+      updateAppSettings({ closeAction: action })
+    }
+    if (action === 'tray') {
+      window.ipcRenderer?.invoke('window-hide')
+    } else {
+      window.ipcRenderer?.invoke('window-quit')
+    }
+  }
 
   useEffect(() => {
     window.appInfo?.getVersion().then(setAppVersion).catch(() => {})
@@ -136,22 +200,54 @@ function App() {
     playAlertSound()
   }
 
+  // Use refs to track alert state without causing effect re-runs
+  const alertStartTimeRef = useRef<number>(0)
+  const consecutiveNotNearCountRef = useRef<number>(0)
+
   useEffect(() => {
-    if (!showAlert) return
+    if (!showAlert) {
+      // Reset refs when alert is hidden
+      alertStartTimeRef.current = 0
+      consecutiveNotNearCountRef.current = 0
+      return
+    }
+
+    // Only set start time once when alert first appears
+    if (alertStartTimeRef.current === 0) {
+      alertStartTimeRef.current = Date.now()
+      consecutiveNotNearCountRef.current = 0
+    }
+
+    const MINIMUM_ALERT_DURATION = 2000 // Alert must show for at least 2 seconds
+    const REQUIRED_CONSECUTIVE_FRAMES = 15 // ~1.5 seconds at 100ms intervals
 
     const checkInterval = setInterval(() => {
       const handNear = isHandNearHead()
+      const elapsedTime = Date.now() - alertStartTimeRef.current
 
       window.ipcRenderer?.invoke('update-alert-data', {
-        canDismiss: !handNear,
+        canDismiss: !handNear && elapsedTime >= MINIMUM_ALERT_DURATION,
         activeZone,
         language,
       })
 
+      // Don't allow dismissal before minimum duration
+      if (elapsedTime < MINIMUM_ALERT_DURATION) {
+        consecutiveNotNearCountRef.current = 0
+        return
+      }
+
       if (!handNear) {
-        setShowAlert(false)
-        window.ipcRenderer?.invoke('hide-fullscreen-alert')
-        clearInterval(checkInterval)
+        consecutiveNotNearCountRef.current++
+        // Only hide alert after hand has been away for sustained period
+        if (consecutiveNotNearCountRef.current >= REQUIRED_CONSECUTIVE_FRAMES) {
+          setShowAlert(false)
+          window.ipcRenderer?.invoke('hide-fullscreen-alert')
+          clearInterval(checkInterval)
+        }
+      } else {
+        // Reset counter if hand is detected near head again
+        consecutiveNotNearCountRef.current = 0
       }
     }, 100)
 
@@ -159,11 +255,13 @@ function App() {
   }, [showAlert, activeZone, language, isHandNearHead])
 
   useEffect(() => {
-    if (showAlert && detectionState === 'IDLE') {
+    // Only close alert when detection is stopped AND hand is not near head
+    // This prevents the alert from flickering when cooldown ends but hand is still touching
+    if (showAlert && detectionState === 'IDLE' && !isHandNearHead()) {
       setShowAlert(false)
       window.ipcRenderer?.invoke('hide-fullscreen-alert')
     }
-  }, [showAlert, detectionState])
+  }, [showAlert, detectionState, isHandNearHead])
 
   useEffect(() => {
     const handleAlertDismissed = () => setShowAlert(false)
@@ -247,18 +345,15 @@ function App() {
             cameraDevices={cameraDevices}
             selectedCameraId={selectedCameraId}
             onCameraChange={setSelectedCameraId}
+            hidePreview={appSettings.hidePreview}
+            onHidePreviewChange={(hide) => updateAppSettings({ hidePreview: hide })}
+            closeAction={appSettings.closeAction}
+            onCloseActionChange={(action) => updateAppSettings({ closeAction: action })}
           />
           <div className="window-controls">
             <button
-              className="window-btn minimize"
-              onClick={() => window.ipcRenderer?.invoke('window-minimize')}
-              title={t.buttonMinimize}
-            >
-              ─
-            </button>
-            <button
               className="window-btn close"
-              onClick={() => window.ipcRenderer?.invoke('window-close')}
+              onClick={handleCloseClick}
               title={t.buttonClose}
             >
               ✕
@@ -277,6 +372,7 @@ function App() {
             isRunning={isRunning}
             faceLandmarksCount={faceLandmarksCount}
             handsCount={handsCount}
+            hidePreview={appSettings.hidePreview}
           />
 
           {/* Progress Bar (when detecting) */}
@@ -358,6 +454,13 @@ function App() {
 
       {showAbout && (
         <AboutModal onClose={() => setShowAbout(false)} />
+      )}
+
+      {showCloseModal && (
+        <CloseConfirmModal
+          onClose={handleCloseAction}
+          onCancel={() => setShowCloseModal(false)}
+        />
       )}
     </div>
   )

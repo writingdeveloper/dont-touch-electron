@@ -39,8 +39,28 @@ async function initAutoUpdater() {
 export async function update(win: Electron.BrowserWindow) {
   // Initialize autoUpdater
   const initialized = await initAutoUpdater();
+
+  // Register fallback handlers first (for dev mode or when autoUpdater fails)
   if (!initialized || !autoUpdater) {
     console.log('Auto-updater not available');
+
+    // Register stub handlers so IPC calls don't fail
+    ipcMain.handle('check-update', async () => {
+      return { message: 'Auto-updater not available', error: new Error('Not available') }
+    })
+
+    ipcMain.handle('check-update-silent', async () => {
+      return { checked: false, reason: 'not-available' }
+    })
+
+    ipcMain.handle('start-download', () => {
+      return { error: 'Auto-updater not available' }
+    })
+
+    ipcMain.handle('quit-and-install', () => {
+      return { error: 'Auto-updater not available' }
+    })
+
     return;
   }
 
@@ -75,6 +95,21 @@ export async function update(win: Electron.BrowserWindow) {
       return await autoUpdater.checkForUpdatesAndNotify()
     } catch (error) {
       return { message: 'Network error', error }
+    }
+  })
+
+  // Silent update check (for splash screen - doesn't throw errors)
+  ipcMain.handle('check-update-silent', async () => {
+    if (!app.isPackaged) {
+      return { checked: false, reason: 'dev-mode' }
+    }
+
+    try {
+      await autoUpdater.checkForUpdates()
+      return { checked: true }
+    } catch {
+      // Silently ignore errors during startup
+      return { checked: false, reason: 'network-error' }
     }
   })
 
