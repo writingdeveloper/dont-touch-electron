@@ -13,6 +13,11 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
   const [statusText, setStatusText] = useState('')
   const [isReady, setIsReady] = useState(false)
   const [updateCheckFailed, setUpdateCheckFailed] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    window.appInfo?.getVersion().then(setAppVersion).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const startTime = Date.now()
@@ -104,7 +109,7 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
         </div>
 
         <p className="splash-version">
-          {t.splashLoading || 'Loading...'}
+          {appVersion ? `v${appVersion}` : (t.splashLoading || 'Loading...')}
         </p>
       </div>
     </div>

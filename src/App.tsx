@@ -57,6 +57,12 @@ const defaultAppSettings: AppSettings = {
   closeAction: 'ask',
 }
 
+interface UpdateInfo {
+  update: boolean
+  version: string
+  newVersion?: string
+}
+
 function App() {
   const { t, language } = useLanguage()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -69,6 +75,13 @@ function App() {
   const [showCloseModal, setShowCloseModal] = useState(false)
   const [appVersion, setAppVersion] = useState('')
   const detectingStartTimeRef = useRef<number | null>(null)
+
+  // Update notification state
+  const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null)
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false)
+  const [updateDownloading, setUpdateDownloading] = useState(false)
+  const [updateProgress, setUpdateProgress] = useState(0)
+  const [updateDownloaded, setUpdateDownloaded] = useState(false)
 
   // App settings state
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
@@ -118,6 +131,37 @@ function App() {
 
   useEffect(() => {
     window.appInfo?.getVersion().then(setAppVersion).catch(() => {})
+  }, [])
+
+  // Listen for update availability (from splash screen check or manual check)
+  useEffect(() => {
+    const handleUpdateAvailable = (_event: Electron.IpcRendererEvent, info: UpdateInfo) => {
+      if (info.update) {
+        setUpdateAvailable(info)
+        // Auto-open About modal when update is available
+        setShowAbout(true)
+      }
+    }
+
+    const handleDownloadProgress = (_event: Electron.IpcRendererEvent, info: { percent: number }) => {
+      setUpdateDownloading(true)
+      setUpdateProgress(info.percent || 0)
+    }
+
+    const handleUpdateDownloaded = () => {
+      setUpdateDownloading(false)
+      setUpdateDownloaded(true)
+      setUpdateProgress(100)
+    }
+
+    window.ipcRenderer?.on('update-can-available', handleUpdateAvailable)
+    window.ipcRenderer?.on('download-progress', handleDownloadProgress)
+    window.ipcRenderer?.on('update-downloaded', handleUpdateDownloaded)
+    return () => {
+      window.ipcRenderer?.off('update-can-available', handleUpdateAvailable)
+      window.ipcRenderer?.off('download-progress', handleDownloadProgress)
+      window.ipcRenderer?.off('update-downloaded', handleUpdateDownloaded)
+    }
   }, [])
 
   const {
@@ -361,6 +405,73 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Update Banner */}
+      {updateAvailable && !updateBannerDismissed && (
+        <div className={`update-banner ${updateDownloaded ? 'ready' : updateDownloading ? 'downloading' : ''}`}>
+          <div className="update-banner-content">
+            {updateDownloaded ? (
+              <>
+                <span className="update-banner-icon">✅</span>
+                <span className="update-banner-text">
+                  {t.updateAvailable}: v{updateAvailable.newVersion}
+                </span>
+                <button
+                  className="update-banner-action-btn install"
+                  onClick={() => window.ipcRenderer?.invoke('quit-and-install')}
+                >
+                  {t.updateInstall}
+                </button>
+              </>
+            ) : updateDownloading ? (
+              <>
+                <span className="update-banner-icon">⏳</span>
+                <span className="update-banner-text">
+                  {t.updateDownloading} {updateProgress.toFixed(0)}%
+                </span>
+                <div className="update-banner-progress">
+                  <div className="update-banner-progress-fill" style={{ width: `${updateProgress}%` }} />
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="update-banner-icon">🎉</span>
+                <span className="update-banner-text">
+                  {t.updateAvailable}: v{updateAvailable.newVersion}
+                </span>
+                <button
+                  className="update-banner-action-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setUpdateDownloading(true)
+                    window.ipcRenderer?.invoke('start-download')
+                  }}
+                >
+                  {t.updateDownload}
+                </button>
+                <button
+                  className="update-banner-details"
+                  onClick={() => setShowAbout(true)}
+                >
+                  {t.buttonAbout}
+                </button>
+              </>
+            )}
+          </div>
+          {!updateDownloading && !updateDownloaded && (
+            <button
+              className="update-banner-close"
+              onClick={(e) => {
+                e.stopPropagation()
+                setUpdateBannerDismissed(true)
+              }}
+              title={t.updateLater}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="app-main">
