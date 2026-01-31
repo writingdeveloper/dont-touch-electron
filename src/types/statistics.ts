@@ -56,21 +56,27 @@ export interface ExportData {
   dailyStats: DailyStats[]
 }
 
-// Default values
-export const DEFAULT_HABIT_SETTINGS: HabitSettings = {
-  touchThresholdForMeditation: 5,
-  dailyTouchGoal: 10,
-  meditationDuration: 180,
-  enableMeditationReminder: true,
-  meditationCooldownMinutes: 30,
+// Helper to convert Date object to local date string (YYYY-MM-DD)
+export function dateToLocalString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-export const DEFAULT_PROGRESS: UserProgress = {
-  currentStreak: 0,
-  longestStreak: 0,
-  totalMeditationMinutes: 0,
-  totalMeditationSessions: 0,
-  startDate: new Date().toISOString().split('T')[0],
+// Helper to convert timestamp to local date string (YYYY-MM-DD)
+export function timestampToLocalDateString(timestamp: number): string {
+  return dateToLocalString(new Date(timestamp))
+}
+
+// Helper to get today's date string (local timezone)
+export function getTodayDateString(): string {
+  return dateToLocalString(new Date())
+}
+
+// Generate UUID
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
 // Helper to create empty daily stats
@@ -87,12 +93,19 @@ export function createEmptyDailyStats(date: string): DailyStats {
   }
 }
 
-// Helper to get today's date string
-export function getTodayDateString(): string {
-  return new Date().toISOString().split('T')[0]
+// Default values
+export const DEFAULT_HABIT_SETTINGS: HabitSettings = {
+  touchThresholdForMeditation: 5,
+  dailyTouchGoal: 10,
+  meditationDuration: 180,
+  enableMeditationReminder: true,
+  meditationCooldownMinutes: 30,
 }
 
-// Generate UUID
-export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+export const DEFAULT_PROGRESS: UserProgress = {
+  currentStreak: 0,
+  longestStreak: 0,
+  totalMeditationMinutes: 0,
+  totalMeditationSessions: 0,
+  startDate: dateToLocalString(new Date()),
 }
