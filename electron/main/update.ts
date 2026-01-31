@@ -1,87 +1,39 @@
 import { app, ipcMain } from 'electron'
 import { trackEvent } from '@aptabase/electron/main'
-
-// Define types locally to avoid CJS/ESM import issues
-interface ProgressInfo {
-  total: number;
-  delta: number;
-  transferred: number;
-  percent: number;
-  bytesPerSecond: number;
-}
-
-interface UpdateInfo {
-  version: string;
-  releaseDate?: string;
-  releaseName?: string;
-  releaseNotes?: string;
-}
+import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
 
 interface UpdateDownloadedEvent {
   downloadedFile: string;
   version: string;
 }
 
-// Import autoUpdater - use dynamic import to avoid CJS/ESM issues
-let autoUpdater: any = null;
-
-async function initAutoUpdater() {
-  try {
-    const module = await import('electron-updater');
-    autoUpdater = module.autoUpdater;
-    return true;
-  } catch (e) {
-    console.log('electron-updater not available:', e);
-    return false;
-  }
-}
-
-export async function update(win: Electron.BrowserWindow) {
-  // Initialize autoUpdater
-  const initialized = await initAutoUpdater();
-
-  // Register fallback handlers first (for dev mode or when autoUpdater fails)
-  if (!initialized || !autoUpdater) {
-    console.log('Auto-updater not available');
-
-    // Register stub handlers so IPC calls don't fail
-    ipcMain.handle('check-update', async () => {
-      return { message: 'Auto-updater not available', error: new Error('Not available') }
-    })
-
-    ipcMain.handle('check-update-silent', async () => {
-      return { checked: false, reason: 'not-available' }
-    })
-
-    ipcMain.handle('start-download', () => {
-      return { error: 'Auto-updater not available' }
-    })
-
-    ipcMain.handle('quit-and-install', () => {
-      return { error: 'Auto-updater not available' }
-    })
-
-    return;
-  }
-
-  // When set to false, the update download will be triggered through the API
+export function update(win: Electron.BrowserWindow) {
+  // Configure autoUpdater
   autoUpdater.autoDownload = false
   autoUpdater.disableWebInstaller = false
   autoUpdater.allowDowngrade = false
 
   // start check
-  autoUpdater.on('checking-for-update', function () { })
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for updates...')
+  })
   // update available
-  autoUpdater.on('update-available', (arg: UpdateInfo) => {
-    win.webContents.send('update-can-available', { update: true, version: app.getVersion(), newVersion: arg?.version })
+  autoUpdater.on('update-available', (info: UpdateInfo) => {
+    console.log('Update available:', info.version)
+    win.webContents.send('update-can-available', { update: true, version: app.getVersion(), newVersion: info?.version })
     trackEvent('update_available', {
       current_version: app.getVersion(),
-      new_version: arg?.version || 'unknown'
+      new_version: info?.version || 'unknown'
     })
   })
   // update not available
-  autoUpdater.on('update-not-available', (arg: UpdateInfo) => {
-    win.webContents.send('update-can-available', { update: false, version: app.getVersion(), newVersion: arg?.version })
+  autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+    console.log('No update available, current version:', app.getVersion())
+    win.webContents.send('update-can-available', { update: false, version: app.getVersion(), newVersion: info?.version })
+  })
+  // error
+  autoUpdater.on('error', (err: Error) => {
+    console.error('Auto-updater error:', err)
   })
 
   // Checking for updates
@@ -144,8 +96,8 @@ function startDownload(
   callback: (error: Error | null, info: ProgressInfo | null) => void,
   complete: (event: UpdateDownloadedEvent) => void,
 ) {
-  autoUpdater.on('download-progress', (info: ProgressInfo) => callback(null, info))
-  autoUpdater.on('error', (error: Error) => callback(error, null))
+  autoUpdater.on('download-progress', (info) => callback(null, info))
+  autoUpdater.on('error', (error) => callback(error, null))
   autoUpdater.on('update-downloaded', complete)
   autoUpdater.downloadUpdate()
 }
