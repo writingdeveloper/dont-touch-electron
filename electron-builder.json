@@ -26,12 +26,14 @@
   ],
   "mac": {
     "icon": "public/icon.png",
-    "artifactName": "${productName}_${version}.${ext}",
+    "artifactName": "DontTouch-${version}-mac.${ext}",
     "target": [
-      "dmg",
-      "zip"
+      "dmg"
     ],
     "category": "public.app-category.healthcare-fitness"
+  },
+  "dmg": {
+    "artifactName": "DontTouch-${version}-mac.${ext}"
   },
   "win": {
     "target": [
@@ -42,18 +44,20 @@
         ]
       }
     ],
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "DontTouch-${version}-win-setup.${ext}"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false,
-    "shortcutName": "Don't Touch"
+    "shortcutName": "Don't Touch",
+    "artifactName": "DontTouch-${version}-win-setup.${ext}"
   },
   "linux": {
     "icon": "public/icon.png",
-    "target": ["AppImage", "deb"],
+    "artifactName": "DontTouch-${version}-linux.${ext}",
+    "target": ["AppImage"],
     "category": "Utility"
   }
 }
