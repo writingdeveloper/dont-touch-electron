@@ -12,6 +12,7 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
   const [progress, setProgress] = useState(0)
   const [statusText, setStatusText] = useState('')
   const [isReady, setIsReady] = useState(false)
+  const [updateCheckFailed, setUpdateCheckFailed] = useState(false)
 
   useEffect(() => {
     const startTime = Date.now()
@@ -39,8 +40,12 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
     }, minimumDuration / stages.length)
 
     // Check for update in background (non-blocking)
-    window.ipcRenderer?.invoke('check-update-silent').catch(() => {
-      // Ignore update check errors
+    window.ipcRenderer?.invoke('check-update-silent').then((result: { checked: boolean; reason?: string }) => {
+      if (!result.checked) {
+        setUpdateCheckFailed(true)
+      }
+    }).catch(() => {
+      setUpdateCheckFailed(true)
     })
 
     // Mark resources as loaded after initial setup
@@ -90,7 +95,12 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="splash-status">{statusText}</p>
+          <p className="splash-status">
+          {statusText}
+          {updateCheckFailed && progress > 10 && (
+            <span className="splash-update-failed"> ({t.splashUpdateCheckFailed || 'Update check failed'})</span>
+          )}
+        </p>
         </div>
 
         <p className="splash-version">

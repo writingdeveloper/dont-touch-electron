@@ -181,6 +181,7 @@ export interface Translations {
 
   // Splash Screen
   splashCheckingUpdates: string;
+  splashUpdateCheckFailed: string;
   splashLoadingResources: string;
   splashInitializingDetection: string;
   splashPreparingInterface: string;
@@ -391,6 +392,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: 'Checking for updates...',
+    splashUpdateCheckFailed: 'Update check failed',
     splashLoadingResources: 'Loading resources...',
     splashInitializingDetection: 'Initializing detection model...',
     splashPreparingInterface: 'Preparing interface...',
@@ -600,6 +602,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: '업데이트 확인 중...',
+    splashUpdateCheckFailed: '업데이트 확인 실패',
     splashLoadingResources: '리소스 로딩 중...',
     splashInitializingDetection: '감지 모델 초기화 중...',
     splashPreparingInterface: '인터페이스 준비 중...',
@@ -809,6 +812,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: 'アップデートを確認中...',
+    splashUpdateCheckFailed: 'アップデート確認失敗',
     splashLoadingResources: 'リソースを読み込み中...',
     splashInitializingDetection: '検出モデルを初期化中...',
     splashPreparingInterface: 'インターフェースを準備中...',
@@ -1018,6 +1022,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: '正在检查更新...',
+    splashUpdateCheckFailed: '检查更新失败',
     splashLoadingResources: '正在加载资源...',
     splashInitializingDetection: '正在初始化检测模型...',
     splashPreparingInterface: '正在准备界面...',
@@ -1227,6 +1232,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: 'Comprobando actualizaciones...',
+    splashUpdateCheckFailed: 'Error al comprobar actualizaciones',
     splashLoadingResources: 'Cargando recursos...',
     splashInitializingDetection: 'Inicializando modelo de detección...',
     splashPreparingInterface: 'Preparando interfaz...',
@@ -1436,6 +1442,7 @@ export const translations: Record<Language, Translations> = {
 
     // Splash Screen
     splashCheckingUpdates: 'Проверка обновлений...',
+    splashUpdateCheckFailed: 'Ошибка проверки обновлений',
     splashLoadingResources: 'Загрузка ресурсов...',
     splashInitializingDetection: 'Инициализация модели обнаружения...',
     splashPreparingInterface: 'Подготовка интерфейса...',
