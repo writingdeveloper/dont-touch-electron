@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { trackEvent } from '@aptabase/electron/main'
 
 // Define types locally to avoid CJS/ESM import issues
 interface ProgressInfo {
@@ -53,6 +54,10 @@ export async function update(win: Electron.BrowserWindow) {
   // update available
   autoUpdater.on('update-available', (arg: UpdateInfo) => {
     win.webContents.send('update-can-available', { update: true, version: app.getVersion(), newVersion: arg?.version })
+    trackEvent('update_available', {
+      current_version: app.getVersion(),
+      new_version: arg?.version || 'unknown'
+    })
   })
   // update not available
   autoUpdater.on('update-not-available', (arg: UpdateInfo) => {
@@ -88,12 +93,14 @@ export async function update(win: Electron.BrowserWindow) {
       () => {
         // feedback update downloaded message
         event.sender.send('update-downloaded')
+        trackEvent('update_downloaded')
       }
     )
   })
 
   // Install now
   ipcMain.handle('quit-and-install', () => {
+    trackEvent('update_installed')
     autoUpdater.quitAndInstall(false, true)
   })
 }

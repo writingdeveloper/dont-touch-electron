@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useLanguage } from '../i18n/LanguageContext'
 
 interface AlertOverlayProps {
   onDismiss?: () => void
@@ -6,6 +7,7 @@ interface AlertOverlayProps {
 }
 
 export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps) {
+  const { t } = useLanguage()
   const [isShaking, setIsShaking] = useState(false)
   const [showHint, setShowHint] = useState(false)
 
@@ -47,7 +49,7 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
 
       <div className={`alert-content-fullscreen ${isShaking ? 'shake' : ''}`}>
         <div className="alert-warning-badge">
-          <span className="badge-text">WARNING</span>
+          <span className="badge-text">{t.alertWarning}</span>
         </div>
 
         <div className="alert-icon-container">
@@ -58,24 +60,24 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
           </svg>
         </div>
 
-        <h1 className="alert-title">FACE TOUCH DETECTED</h1>
-        <p className="alert-subtitle">Remove your hand from your face immediately</p>
+        <h1 className="alert-title">{t.alertTitle}</h1>
+        <p className="alert-subtitle">{t.alertSubtitle}</p>
 
         <div className="alert-status">
           <div className="status-line">
-            <span className="status-label">STATUS:</span>
-            <span className="status-value danger">VIOLATION</span>
+            <span className="status-label">{t.alertStatus}:</span>
+            <span className="status-value danger">{t.alertViolation}</span>
           </div>
           <div className="status-line">
-            <span className="status-label">ACTION:</span>
-            <span className="status-value">{canDismiss ? 'CLEAR TO DISMISS' : 'HAND STILL NEAR'}</span>
+            <span className="status-label">{t.alertAction}:</span>
+            <span className="status-value">{canDismiss ? t.alertClearToDismiss : t.alertHandStillNear}</span>
           </div>
         </div>
 
         <div className={`alert-hint ${showHint ? 'hint-warning' : ''}`}>
           {showHint
-            ? 'MOVE HAND AWAY FROM FACE FIRST'
-            : 'Click anywhere or press any key to dismiss'
+            ? t.alertMoveHandAway
+            : t.alertDismissHint
           }
         </div>
       </div>

@@ -10,6 +10,12 @@
     "dist-electron",
     "dist"
   ],
+  "publish": {
+    "provider": "github",
+    "owner": "writingdeveloper",
+    "repo": "dont-touch-electron",
+    "releaseType": "release"
+  },
   "extraResources": [
     {
       "from": "public",
