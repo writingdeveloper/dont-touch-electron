@@ -1,8 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 
 interface AboutModalProps {
   onClose: () => void
+}
+
+interface VersionInfo {
+  update: boolean
+  version: string
+  newVersion?: string
+}
+
+interface ProgressInfo {
+  percent: number
+  bytesPerSecond?: number
+  transferred?: number
+  total?: number
 }
 
 const GITHUB_URL = 'https://github.com/writingdeveloper/dont-touch-electron'
@@ -12,12 +25,188 @@ export function AboutModal({ onClose }: AboutModalProps) {
   const currentYear = new Date().getFullYear()
   const [version, setVersion] = useState('...')
 
+  // Update states
+  const [checking, setChecking] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState<boolean | null>(null)
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState<number>(0)
+  const [downloadComplete, setDownloadComplete] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+
   useEffect(() => {
     window.appInfo?.getVersion().then(setVersion).catch(() => setVersion('1.0.0'))
   }, [])
 
   const openExternal = (url: string) => {
     window.ipcRenderer?.invoke('open-external', url)
+  }
+
+  // Check for updates
+  const checkForUpdates = async () => {
+    setChecking(true)
+    setUpdateError(null)
+    setUpdateAvailable(null)
+
+    try {
+      const result = await window.ipcRenderer?.invoke('check-update')
+      if (result?.error) {
+        setUpdateError(result.message || t.updateError)
+        setUpdateAvailable(false)
+      }
+    } catch (err) {
+      setUpdateError(t.updateError)
+      setUpdateAvailable(false)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // Start download
+  const startDownload = () => {
+    setDownloading(true)
+    setDownloadProgress(0)
+    window.ipcRenderer?.invoke('start-download')
+  }
+
+  // Install update
+  const installUpdate = () => {
+    window.ipcRenderer?.invoke('quit-and-install')
+  }
+
+  // IPC event handlers
+  const onUpdateCanAvailable = useCallback((_event: Electron.IpcRendererEvent, arg: VersionInfo) => {
+    setChecking(false)
+    setVersionInfo(arg)
+    setUpdateAvailable(arg.update)
+  }, [])
+
+  const onUpdateError = useCallback((_event: Electron.IpcRendererEvent, arg: { message: string }) => {
+    setUpdateError(arg.message)
+    setDownloading(false)
+  }, [])
+
+  const onDownloadProgress = useCallback((_event: Electron.IpcRendererEvent, arg: ProgressInfo) => {
+    setDownloadProgress(arg.percent || 0)
+  }, [])
+
+  const onUpdateDownloaded = useCallback(() => {
+    setDownloading(false)
+    setDownloadComplete(true)
+    setDownloadProgress(100)
+  }, [])
+
+  useEffect(() => {
+    window.ipcRenderer?.on('update-can-available', onUpdateCanAvailable)
+    window.ipcRenderer?.on('update-error', onUpdateError)
+    window.ipcRenderer?.on('download-progress', onDownloadProgress)
+    window.ipcRenderer?.on('update-downloaded', onUpdateDownloaded)
+
+    return () => {
+      window.ipcRenderer?.off('update-can-available', onUpdateCanAvailable)
+      window.ipcRenderer?.off('update-error', onUpdateError)
+      window.ipcRenderer?.off('download-progress', onDownloadProgress)
+      window.ipcRenderer?.off('update-downloaded', onUpdateDownloaded)
+    }
+  }, [onUpdateCanAvailable, onUpdateError, onDownloadProgress, onUpdateDownloaded])
+
+  const renderUpdateSection = () => {
+    // Downloading state
+    if (downloading) {
+      return (
+        <div className="update-status downloading">
+          <div className="update-progress-bar">
+            <div className="progress-fill" style={{ width: `${downloadProgress}%` }} />
+          </div>
+          <span className="update-text">{t.updateDownloading} {downloadProgress.toFixed(0)}%</span>
+        </div>
+      )
+    }
+
+    // Download complete - ready to install
+    if (downloadComplete) {
+      return (
+        <div className="update-status ready">
+          <span className="update-text">{t.updateAvailable}</span>
+          <div className="update-buttons">
+            <button className="update-btn install" onClick={installUpdate}>
+              {t.updateInstall}
+            </button>
+            <button className="update-btn later" onClick={onClose}>
+              {t.updateLater}
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // Update available
+    if (updateAvailable && versionInfo) {
+      return (
+        <div className="update-status available">
+          <div className="version-info">
+            <span className="version-badge current">
+              {t.updateCurrent}: v{versionInfo.version}
+            </span>
+            <span className="version-arrow">→</span>
+            <span className="version-badge new">
+              {t.updateNew}: v{versionInfo.newVersion}
+            </span>
+          </div>
+          <button className="update-btn download" onClick={startDownload}>
+            {t.updateDownload}
+          </button>
+        </div>
+      )
+    }
+
+    // No update available
+    if (updateAvailable === false && !updateError) {
+      return (
+        <div className="update-status up-to-date">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          <span className="update-text">{t.updateNotAvailable}</span>
+        </div>
+      )
+    }
+
+    // Error state
+    if (updateError) {
+      return (
+        <div className="update-status error">
+          <span className="update-text">{updateError}</span>
+          <button className="update-btn check" onClick={checkForUpdates}>
+            {t.updateCheck}
+          </button>
+        </div>
+      )
+    }
+
+    // Default - check button
+    return (
+      <button
+        className="update-btn check"
+        onClick={checkForUpdates}
+        disabled={checking}
+      >
+        {checking ? (
+          <>
+            <span className="spinner" />
+            {t.updateChecking}
+          </>
+        ) : (
+          <>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+            {t.updateCheck}
+          </>
+        )}
+      </button>
+    )
   }
 
   return (
@@ -32,6 +221,12 @@ export function AboutModal({ onClose }: AboutModalProps) {
         </div>
 
         <div className="about-content">
+          {/* Update Section */}
+          <div className="about-section update-section">
+            <h4>{t.updateTitle || 'Software Update'}</h4>
+            {renderUpdateSection()}
+          </div>
+
           <p className="about-desc">
             {t.aboutDescription || 'AI-powered face touch detection app to help overcome habits like trichotillomania and skin picking.'}
           </p>
@@ -213,6 +408,189 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           .about-section li {
             margin-bottom: 4px;
+          }
+
+          /* Update Section Styles */
+          .update-section {
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 20px;
+          }
+
+          .update-section h4 {
+            color: #00ffff;
+            margin-bottom: 12px;
+          }
+
+          .update-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+          }
+
+          .update-btn.check {
+            width: 100%;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+          }
+
+          .update-btn.check:hover:not(:disabled) {
+            background: rgba(0, 255, 255, 0.2);
+          }
+
+          .update-btn.check:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .update-btn.download {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            color: #00ff88;
+          }
+
+          .update-btn.download:hover {
+            background: rgba(0, 255, 136, 0.3);
+          }
+
+          .update-btn.install {
+            background: rgba(0, 255, 136, 0.3);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+          }
+
+          .update-btn.install:hover {
+            background: rgba(0, 255, 136, 0.4);
+          }
+
+          .update-btn.later {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #888;
+          }
+
+          .update-btn.later:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+          }
+
+          .update-status {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+          }
+
+          .update-status.up-to-date {
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            color: #00ff88;
+            font-size: 13px;
+            gap: 8px;
+          }
+
+          .update-status.error {
+            align-items: center;
+          }
+
+          .update-status.error .update-text {
+            color: #ff6b6b;
+            font-size: 12px;
+            text-align: center;
+          }
+
+          .update-status.available {
+            align-items: center;
+          }
+
+          .update-status.ready .update-text {
+            text-align: center;
+            color: #00ff88;
+            font-size: 13px;
+          }
+
+          .update-buttons {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+          }
+
+          .update-buttons .update-btn {
+            flex: 1;
+          }
+
+          .version-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 4px;
+          }
+
+          .version-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+          }
+
+          .version-badge.current {
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+          }
+
+          .version-badge.new {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+          }
+
+          .version-arrow {
+            color: #555;
+          }
+
+          .update-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+          }
+
+          .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ffff, #00ff88);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+          }
+
+          .update-status.downloading .update-text {
+            text-align: center;
+            color: #00ffff;
+            font-size: 12px;
+          }
+
+          .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+          }
+
+          @keyframes spin {
+            to { transform: rotate(360deg); }
           }
 
           .tech-badges {
