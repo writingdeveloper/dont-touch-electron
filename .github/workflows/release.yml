@@ -37,11 +37,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            release/**/*.exe
-            release/**/*.dmg
-            release/**/*.zip
-            release/**/*.AppImage
-            release/**/*.deb
+            release/**/DontTouch-*-win-setup.exe
+            release/**/DontTouch-*-mac.dmg
+            release/**/DontTouch-*-linux.AppImage
             release/**/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
