@@ -3,7 +3,10 @@
   "version": "1.0.3",
   "main": "dist-electron/main/index.js",
   "description": "Face-touch detection app for habit improvement using MediaPipe",
-  "author": "writingdeveloper",
+  "author": {
+    "name": "writingdeveloper",
+    "email": "writingdeveloper@gmail.com"
+  },
   "license": "MIT",
   "private": true,
   "debug": {
