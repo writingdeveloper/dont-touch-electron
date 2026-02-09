@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, RefObject } from 'react'
 import { MediaPipeDetector } from '../detection/MediaPipeDetector'
 import { ProximityAnalyzer, ProximityInfo } from '../detection/ProximityAnalyzer'
-import { DetectionState, DetectionZone, DEFAULT_ENABLED_ZONES } from '../detection/types'
+import { DetectionState, DetectionZone, DEFAULT_ENABLED_ZONES, ALL_SPECIFIC_ZONES } from '../detection/types'
+import { logger } from '../utils/logger'
 
 interface UseDetectionOptions {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -18,6 +19,7 @@ export interface DetectionConfig {
 
 interface UseDetectionReturn {
   isModelLoaded: boolean
+  modelError: string | null
   detectionState: DetectionState
   isNearHead: boolean
   progress: number
@@ -49,6 +51,7 @@ export function useDetection({
   const [progress, setProgress] = useState(0)
   const [activeZone, setActiveZone] = useState<DetectionZone | null>(null)
   const [config, setConfig] = useState<DetectionConfig>(DEFAULT_CONFIG)
+  const [modelError, setModelError] = useState<string | null>(null)
   const [faceLandmarksCount, setFaceLandmarksCount] = useState<number | null>(null)
   const [handsCount, setHandsCount] = useState(0)
 
@@ -93,7 +96,9 @@ export function useDetection({
 
         setIsModelLoaded(true)
       } catch (err) {
-        console.error('Failed to load detection model:', err)
+        const message = err instanceof Error ? err.message : 'Unknown error loading model'
+        logger.error('Failed to load detection model:', err)
+        setModelError(message)
         isInitializedRef.current = false
       }
     }
@@ -102,6 +107,9 @@ export function useDetection({
 
     return () => {
       detectorRef.current?.dispose()
+      detectorRef.current = null
+      analyzerRef.current?.reset()
+      analyzerRef.current = null
       isInitializedRef.current = false
     }
   }, [])
@@ -109,6 +117,16 @@ export function useDetection({
   const updateConfig = useCallback((newConfig: Partial<DetectionConfig>) => {
     setConfig(prev => {
       const updated = { ...prev, ...newConfig }
+      // Clamp values to valid ranges
+      updated.sensitivity = Math.max(0, Math.min(1, updated.sensitivity))
+      updated.triggerTime = Math.max(0.5, Math.min(3, updated.triggerTime))
+      updated.cooldownTime = Math.max(1, Math.min(10, updated.cooldownTime))
+      // Validate enabledZones — must have at least one valid zone
+      const validZones: DetectionZone[] = ['fullFace', ...ALL_SPECIFIC_ZONES]
+      updated.enabledZones = updated.enabledZones.filter(z => validZones.includes(z))
+      if (updated.enabledZones.length === 0) {
+        updated.enabledZones = DEFAULT_ENABLED_ZONES
+      }
       analyzerRef.current?.updateConfig(updated)
       return updated
     })
@@ -151,7 +169,7 @@ export function useDetection({
         detector.drawResults(ctx, results, proximityInfo.isNearHead)
       }
     } catch (err) {
-      console.error('Detection error:', err)
+      logger.error('Detection error:', err)
     }
 
     // Use setTimeout instead of requestAnimationFrame to keep running
@@ -196,6 +214,7 @@ export function useDetection({
 
   return {
     isModelLoaded,
+    modelError,
     detectionState,
     isNearHead,
     progress,

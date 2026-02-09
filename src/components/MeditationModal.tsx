@@ -48,11 +48,11 @@ export function MeditationModal({ touchCount, onComplete, onDismiss, onSnooze }:
   }
 
   return (
-    <div className="meditation-modal-overlay">
+    <div className="meditation-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="meditation-modal-title">
       <div className="meditation-modal">
         <div className="modal-header">
-          <span className="touch-badge">{touchCount}x</span>
-          <h2>{t.meditationRecommend || 'Time for a mindful break?'}</h2>
+          <span className="touch-badge" aria-hidden="true">{touchCount}x</span>
+          <h2 id="meditation-modal-title">{t.meditationRecommend || 'Time for a mindful break?'}</h2>
           <p>{t.meditationRecommendDesc || "You've touched your face several times. A short breathing exercise can help break the pattern."}</p>
         </div>
 

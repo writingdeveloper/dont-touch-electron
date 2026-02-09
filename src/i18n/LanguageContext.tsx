@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Language, Translations, translations } from './translations';
+import { STORAGE_KEYS } from '../constants/storage-keys';
 
 interface LanguageContextType {
   language: Language;
@@ -11,7 +12,7 @@ const LanguageContext = createContext<LanguageContextType | null>(null);
 
 // Detect browser/system language
 function detectLanguage(): Language {
-  const stored = localStorage.getItem('app-language') as Language | null;
+  const stored = localStorage.getItem(STORAGE_KEYS.LANGUAGE) as Language | null;
   if (stored && translations[stored]) {
     return stored;
   }
@@ -34,7 +35,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('app-language', lang);
+    localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
     // Notify main process to update system tray menu
     window.ipcRenderer?.send('set-language', lang);
   };

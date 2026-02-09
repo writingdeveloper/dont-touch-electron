@@ -16,7 +16,10 @@ interface UseCameraReturn {
   refreshDevices: () => Promise<void>
 }
 
-const STORAGE_KEY = 'dont-touch-camera-device'
+import { STORAGE_KEYS } from '../constants/storage-keys'
+import { logger } from '../utils/logger'
+
+const STORAGE_KEY = STORAGE_KEYS.CAMERA_DEVICE
 
 export function useCamera(): UseCameraReturn {
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -43,7 +46,7 @@ export function useCamera(): UseCameraReturn {
         }))
       setDevices(videoDevices)
     } catch (err) {
-      console.error('Failed to enumerate devices:', err)
+      logger.error('Failed to enumerate devices:', err)
     }
   }, [])
 
@@ -60,7 +63,7 @@ export function useCamera(): UseCameraReturn {
         }))
       setDevices(videoDevices)
     } catch (err) {
-      console.error('Failed to enumerate devices:', err)
+      logger.error('Failed to enumerate devices:', err)
     }
   }, [])
 
@@ -87,6 +90,14 @@ export function useCamera(): UseCameraReturn {
     try {
       setError(null)
 
+      // Stop existing stream before starting new one to prevent leaks
+      setStream(prev => {
+        if (prev) {
+          prev.getTracks().forEach(track => track.stop())
+        }
+        return null
+      })
+
       const targetDeviceId = deviceId || selectedDeviceId
 
       const constraints: MediaStreamConstraints = {
@@ -107,7 +118,7 @@ export function useCamera(): UseCameraReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to access camera'
       setError(message)
-      console.error('Camera error:', err)
+      logger.error('Camera error:', err)
     }
   }, [selectedDeviceId, refreshDevices])
 

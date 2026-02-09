@@ -11,9 +11,9 @@ export function CloseConfirmModal({ onClose, onCancel }: CloseConfirmModalProps)
   const [remember, setRemember] = useState(false)
 
   return (
-    <div className="close-modal-overlay" onClick={onCancel}>
+    <div className="close-modal-overlay" onClick={onCancel} role="dialog" aria-modal="true" aria-labelledby="close-modal-title">
       <div className="close-modal" onClick={(e) => e.stopPropagation()}>
-        <h3>{t.closeModalTitle || 'Close Application'}</h3>
+        <h3 id="close-modal-title">{t.closeModalTitle || 'Close Application'}</h3>
 
         <div className="close-modal-buttons">
           <button className="close-modal-btn quit" onClick={() => onClose('quit', remember)}>

@@ -210,13 +210,13 @@ export function AboutModal({ onClose }: AboutModalProps) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
       <div className="about-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="close-btn" onClick={onClose}>×</button>
+        <button className="close-btn" onClick={onClose} aria-label="Close">×</button>
 
         <div className="about-header">
-          <span className="about-icon">🛡️</span>
-          <h2>{t.appTitle}</h2>
+          <span className="about-icon" aria-hidden="true">🛡️</span>
+          <h2 id="about-modal-title">{t.appTitle}</h2>
           <span className="version">v{version}</span>
         </div>
 
