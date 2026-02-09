@@ -4,6 +4,7 @@ import App from './App'
 import { FullscreenAlert } from './pages/FullscreenAlert'
 import { SplashScreen } from './pages/SplashScreen'
 import { LanguageProvider } from './i18n/LanguageContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 import './index.css'
 
@@ -33,9 +34,11 @@ function Router() {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <Router />
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <Router />
+      </LanguageProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
 

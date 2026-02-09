@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { Language, languageNames } from '../i18n/translations'
 import { HabitSettings, ExportData } from '../types/statistics'
 import { DetectionZone, HAIR_ZONES, FACE_ZONES } from '../detection/types'
+import { AppSettings, DEFAULT_APP_SETTINGS } from '../types/app-settings'
+import { STORAGE_KEYS } from '../constants/storage-keys'
+import { IPC_CHANNELS } from '../constants/ipc-channels'
+import { safeInvoke } from '../utils/ipc'
+import { clampFloat, clampInt } from '../utils/validation'
 
 interface DetectionConfig {
   triggerTime: number
@@ -14,14 +19,6 @@ interface DetectionConfig {
 interface VideoDevice {
   deviceId: string
   label: string
-}
-
-interface AppSettings {
-  autoStart: boolean
-  minimizeToTray: boolean
-  startMinimized: boolean
-  hidePreview: boolean
-  closeAction: 'ask' | 'quit' | 'tray'
 }
 
 interface SettingsPanelProps {
@@ -61,29 +58,57 @@ export function SettingsPanel({
   const [activeTab, setActiveTab] = useState<'detection' | 'habit' | 'data' | 'app'>('detection')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Debounced slider state — local values update instantly, callbacks fire after 150ms
+  const [localSensitivity, setLocalSensitivity] = useState(config.sensitivity)
+  const [localTriggerTime, setLocalTriggerTime] = useState(config.triggerTime)
+  const [localCooldownTime, setLocalCooldownTime] = useState(config.cooldownTime)
+  const [localDailyGoal, setLocalDailyGoal] = useState(habitSettings?.dailyTouchGoal ?? 10)
+  const [localMedThreshold, setLocalMedThreshold] = useState(habitSettings?.touchThresholdForMeditation ?? 5)
+  const configTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const habitTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  // Sync local state when props change externally
+  useEffect(() => { setLocalSensitivity(config.sensitivity) }, [config.sensitivity])
+  useEffect(() => { setLocalTriggerTime(config.triggerTime) }, [config.triggerTime])
+  useEffect(() => { setLocalCooldownTime(config.cooldownTime) }, [config.cooldownTime])
+  useEffect(() => { setLocalDailyGoal(habitSettings?.dailyTouchGoal ?? 10) }, [habitSettings?.dailyTouchGoal])
+  useEffect(() => { setLocalMedThreshold(habitSettings?.touchThresholdForMeditation ?? 5) }, [habitSettings?.touchThresholdForMeditation])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (configTimerRef.current) clearTimeout(configTimerRef.current)
+      if (habitTimerRef.current) clearTimeout(habitTimerRef.current)
+    }
+  }, [])
+
+  const debouncedConfigChange = useCallback((changes: Partial<DetectionConfig>) => {
+    if (configTimerRef.current) clearTimeout(configTimerRef.current)
+    configTimerRef.current = setTimeout(() => onConfigChange(changes), 150)
+  }, [onConfigChange])
+
+  const debouncedHabitChange = useCallback((changes: Partial<HabitSettings>) => {
+    if (habitTimerRef.current) clearTimeout(habitTimerRef.current)
+    habitTimerRef.current = setTimeout(() => onHabitSettingsChange?.(changes), 150)
+  }, [onHabitSettingsChange])
+
   // App settings state (stored in localStorage and synced with electron)
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     try {
-      const stored = localStorage.getItem('dont-touch-app-settings')
+      const stored = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS)
       if (stored) {
-        return JSON.parse(stored)
+        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
       }
     } catch {
       // Ignore
     }
-    return {
-      autoStart: false,
-      minimizeToTray: true,
-      startMinimized: false,
-      hidePreview: false,
-      closeAction: 'ask' as const,
-    }
+    return DEFAULT_APP_SETTINGS
   })
 
   // Sync app settings with Electron main process
   useEffect(() => {
     // Get initial settings from Electron
-    window.ipcRenderer?.invoke('get-app-settings').then((settings: AppSettings | null) => {
+    window.ipcRenderer?.invoke(IPC_CHANNELS.GET_APP_SETTINGS).then((settings: AppSettings | null) => {
       if (settings) {
         setAppSettings(settings)
       }
@@ -96,12 +121,12 @@ export function SettingsPanel({
     const updated = { ...appSettings, ...newSettings }
     setAppSettings(updated)
     try {
-      localStorage.setItem('dont-touch-app-settings', JSON.stringify(updated))
+      localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(updated))
     } catch {
       // Ignore
     }
     // Notify Electron main process
-    window.ipcRenderer?.invoke('set-app-settings', updated)
+    safeInvoke(IPC_CHANNELS.SET_APP_SETTINGS, updated)
   }
 
   const handleExport = () => {
@@ -127,7 +152,12 @@ export function SettingsPanel({
     const reader = new FileReader()
     reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string)
+        const result = event.target?.result
+        if (typeof result !== 'string') {
+          alert(t.settingsImportError)
+          return
+        }
+        const data = JSON.parse(result)
         const success = onImportData(data)
         if (success) {
           alert(t.settingsImportSuccess)
@@ -148,6 +178,8 @@ export function SettingsPanel({
         className="settings-toggle"
         onClick={() => setIsOpen(!isOpen)}
         title={t.settingsButton}
+        aria-label={t.settingsButton}
+        aria-expanded={isOpen}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="3" />
@@ -217,11 +249,15 @@ export function SettingsPanel({
                       min="0"
                       max="1"
                       step="0.1"
-                      value={config.sensitivity}
-                      onChange={(e) => onConfigChange({ sensitivity: parseFloat(e.target.value) })}
+                      value={localSensitivity}
+                      onChange={(e) => {
+                        const v = clampFloat(e.target.value, 0, 1, localSensitivity)
+                        setLocalSensitivity(v)
+                        debouncedConfigChange({ sensitivity: v })
+                      }}
                       className="slider"
                     />
-                    <span className="slider-value">{(config.sensitivity * 100).toFixed(0)}%</span>
+                    <span className="slider-value">{(localSensitivity * 100).toFixed(0)}%</span>
                   </div>
                   <p className="slider-hint">{t.settingsSensitivityHint}</p>
                 </div>
@@ -235,11 +271,15 @@ export function SettingsPanel({
                       min="0.5"
                       max="3"
                       step="0.1"
-                      value={config.triggerTime}
-                      onChange={(e) => onConfigChange({ triggerTime: parseFloat(e.target.value) })}
+                      value={localTriggerTime}
+                      onChange={(e) => {
+                        const v = clampFloat(e.target.value, 0.5, 3, localTriggerTime)
+                        setLocalTriggerTime(v)
+                        debouncedConfigChange({ triggerTime: v })
+                      }}
                       className="slider"
                     />
-                    <span className="slider-value">{config.triggerTime.toFixed(1)}s</span>
+                    <span className="slider-value">{localTriggerTime.toFixed(1)}s</span>
                   </div>
                   <p className="slider-hint">{t.settingsTriggerTimeHint}</p>
                 </div>
@@ -253,11 +293,15 @@ export function SettingsPanel({
                       min="1"
                       max="10"
                       step="0.5"
-                      value={config.cooldownTime}
-                      onChange={(e) => onConfigChange({ cooldownTime: parseFloat(e.target.value) })}
+                      value={localCooldownTime}
+                      onChange={(e) => {
+                        const v = clampFloat(e.target.value, 1, 10, localCooldownTime)
+                        setLocalCooldownTime(v)
+                        debouncedConfigChange({ cooldownTime: v })
+                      }}
                       className="slider"
                     />
-                    <span className="slider-value">{config.cooldownTime.toFixed(1)}s</span>
+                    <span className="slider-value">{localCooldownTime.toFixed(1)}s</span>
                   </div>
                   <p className="slider-hint">{t.settingsCooldownTimeHint}</p>
                 </div>
@@ -344,11 +388,15 @@ export function SettingsPanel({
                       min="3"
                       max="30"
                       step="1"
-                      value={habitSettings.dailyTouchGoal}
-                      onChange={(e) => onHabitSettingsChange({ dailyTouchGoal: parseInt(e.target.value) })}
+                      value={localDailyGoal}
+                      onChange={(e) => {
+                        const v = clampInt(e.target.value, 3, 30, localDailyGoal)
+                        setLocalDailyGoal(v)
+                        debouncedHabitChange({ dailyTouchGoal: v })
+                      }}
                       className="slider"
                     />
-                    <span className="slider-value">{habitSettings.dailyTouchGoal}</span>
+                    <span className="slider-value">{localDailyGoal}</span>
                   </div>
                   <p className="slider-hint">{t.settingsDailyGoalHint || 'Stay under this to maintain your streak'}</p>
                 </div>
@@ -362,11 +410,15 @@ export function SettingsPanel({
                       min="3"
                       max="15"
                       step="1"
-                      value={habitSettings.touchThresholdForMeditation}
-                      onChange={(e) => onHabitSettingsChange({ touchThresholdForMeditation: parseInt(e.target.value) })}
+                      value={localMedThreshold}
+                      onChange={(e) => {
+                        const v = clampInt(e.target.value, 3, 15, localMedThreshold)
+                        setLocalMedThreshold(v)
+                        debouncedHabitChange({ touchThresholdForMeditation: v })
+                      }}
                       className="slider"
                     />
-                    <span className="slider-value">{habitSettings.touchThresholdForMeditation}</span>
+                    <span className="slider-value">{localMedThreshold}</span>
                   </div>
                   <p className="slider-hint">{t.settingsMeditationThresholdHint || 'Suggest meditation after N touches'}</p>
                 </div>

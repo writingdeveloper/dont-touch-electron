@@ -246,7 +246,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: 'Start Detection',
     controlStop: 'Stop Detection',
-    controlLoading: 'Initializing TensorFlow.js...',
+    controlLoading: 'Initializing MediaPipe...',
 
     videoCameraOffline: 'CAMERA OFFLINE',
     videoInitialize: 'Initialize detection system to begin monitoring',
@@ -456,7 +456,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: '감지 시작',
     controlStop: '감지 중지',
-    controlLoading: 'TensorFlow.js 초기화 중...',
+    controlLoading: 'MediaPipe 초기화 중...',
 
     videoCameraOffline: '카메라 꺼짐',
     videoInitialize: '모니터링을 시작하려면 감지 시스템을 초기화하세요',
@@ -666,7 +666,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: '検出開始',
     controlStop: '検出停止',
-    controlLoading: 'TensorFlow.js初期化中...',
+    controlLoading: 'MediaPipe初期化中...',
 
     videoCameraOffline: 'カメラオフライン',
     videoInitialize: '監視を開始するには検出システムを初期化してください',
@@ -876,7 +876,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: '开始检测',
     controlStop: '停止检测',
-    controlLoading: '正在初始化TensorFlow.js...',
+    controlLoading: '正在初始化MediaPipe...',
 
     videoCameraOffline: '摄像头离线',
     videoInitialize: '初始化检测系统以开始监控',
@@ -1086,7 +1086,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: 'Iniciar Detección',
     controlStop: 'Detener Detección',
-    controlLoading: 'Inicializando TensorFlow.js...',
+    controlLoading: 'Inicializando MediaPipe...',
 
     videoCameraOffline: 'CÁMARA DESCONECTADA',
     videoInitialize: 'Inicialice el sistema de detección para comenzar el monitoreo',
@@ -1296,7 +1296,7 @@ export const translations: Record<Language, Translations> = {
 
     controlStart: 'Начать обнаружение',
     controlStop: 'Остановить обнаружение',
-    controlLoading: 'Инициализация TensorFlow.js...',
+    controlLoading: 'Инициализация MediaPipe...',
 
     videoCameraOffline: 'КАМЕРА ОТКЛЮЧЕНА',
     videoInitialize: 'Инициализируйте систему обнаружения для начала мониторинга',

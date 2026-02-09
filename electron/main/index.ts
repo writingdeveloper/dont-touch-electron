@@ -84,6 +84,28 @@ let alertWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 
+// URL validation for external links
+function isValidExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+// Analytics event whitelist
+const VALID_ANALYTICS_EVENTS = new Set([
+  'app_started',
+  'app_closed',
+  'detection_started',
+  'detection_stopped',
+  'face_touch_detected',
+  'meditation_started',
+  'meditation_completed',
+  'settings_changed',
+])
+
 const preload = path.join(__dirname, '../preload/index.js')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
@@ -220,8 +242,10 @@ async function createWindow() {
 
   if (VITE_DEV_SERVER_URL) { // #298
     win.loadURL(VITE_DEV_SERVER_URL)
-    // Open devTool if the app is not packaged
-    win.webContents.openDevTools()
+    // Open devTool only in development mode AND when not packaged
+    if (!app.isPackaged) {
+      win.webContents.openDevTools()
+    }
   } else {
     win.loadFile(indexHtml)
   }
@@ -242,7 +266,7 @@ async function createWindow() {
 
   // Make all links open with the browser, not with the application
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https:')) shell.openExternal(url)
+    if (isValidExternalUrl(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
 
@@ -383,8 +407,12 @@ ipcMain.handle('window-quit', () => {
   return true
 })
 
-// Analytics IPC handler - track events from renderer
+// Analytics IPC handler - track events from renderer (with whitelist)
 ipcMain.handle('track-event', (_, eventName: string, props?: Record<string, string | number>) => {
+  if (!VALID_ANALYTICS_EVENTS.has(eventName)) {
+    console.warn(`[Analytics] Blocked unknown event: ${eventName}`)
+    return false
+  }
   trackEvent(eventName, props)
   return true
 })
@@ -422,10 +450,12 @@ app.on('activate', () => {
   }
 })
 
-// Open external URL in default browser
+// Open external URL in default browser (with validation)
 ipcMain.handle('open-external', (_, url: string) => {
-  if (url.startsWith('https://') || url.startsWith('http://')) {
+  if (typeof url === 'string' && isValidExternalUrl(url)) {
     shell.openExternal(url)
+  } else {
+    console.warn(`[Security] Blocked invalid external URL: ${url}`)
   }
   return true
 })

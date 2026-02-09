@@ -11,6 +11,10 @@ import { CalendarView } from './components/CalendarView'
 import { AboutModal } from './components/AboutModal'
 import { CloseConfirmModal } from './components/CloseConfirmModal'
 import { useLanguage } from './i18n/LanguageContext'
+import { AppSettings, DEFAULT_APP_SETTINGS } from './types/app-settings'
+import { STORAGE_KEYS } from './constants/storage-keys'
+import { IPC_CHANNELS } from './constants/ipc-channels'
+import { safeInvoke } from './utils/ipc'
 import './App.css'
 
 // Play alert sound with Web Audio API fallback
@@ -39,22 +43,6 @@ function playAlertSound() {
       // Silent fallback if audio fails
     }
   })
-}
-
-interface AppSettings {
-  autoStart: boolean
-  minimizeToTray: boolean
-  startMinimized: boolean
-  hidePreview: boolean
-  closeAction: 'ask' | 'quit' | 'tray'
-}
-
-const defaultAppSettings: AppSettings = {
-  autoStart: false,
-  minimizeToTray: true,
-  startMinimized: false,
-  hidePreview: false,
-  closeAction: 'ask',
 }
 
 interface UpdateInfo {
@@ -86,34 +74,34 @@ function App() {
   // App settings state
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     try {
-      const stored = localStorage.getItem('dont-touch-app-settings')
+      const stored = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS)
       if (stored) {
-        return { ...defaultAppSettings, ...JSON.parse(stored) }
+        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
       }
     } catch {
       // Ignore
     }
-    return defaultAppSettings
+    return DEFAULT_APP_SETTINGS
   })
 
   const updateAppSettings = (newSettings: Partial<AppSettings>) => {
     const updated = { ...appSettings, ...newSettings }
     setAppSettings(updated)
     try {
-      localStorage.setItem('dont-touch-app-settings', JSON.stringify(updated))
+      localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(updated))
     } catch {
       // Ignore
     }
-    window.ipcRenderer?.invoke('set-app-settings', updated)
+    safeInvoke(IPC_CHANNELS.SET_APP_SETTINGS, updated)
   }
 
   const handleCloseClick = () => {
     if (appSettings.closeAction === 'ask') {
       setShowCloseModal(true)
     } else if (appSettings.closeAction === 'tray') {
-      window.ipcRenderer?.invoke('window-hide')
+      safeInvoke(IPC_CHANNELS.WINDOW_HIDE)
     } else {
-      window.ipcRenderer?.invoke('window-quit')
+      safeInvoke(IPC_CHANNELS.WINDOW_QUIT)
     }
   }
 
@@ -123,9 +111,9 @@ function App() {
       updateAppSettings({ closeAction: action })
     }
     if (action === 'tray') {
-      window.ipcRenderer?.invoke('window-hide')
+      safeInvoke(IPC_CHANNELS.WINDOW_HIDE)
     } else {
-      window.ipcRenderer?.invoke('window-quit')
+      safeInvoke(IPC_CHANNELS.WINDOW_QUIT)
     }
   }
 
@@ -154,13 +142,13 @@ function App() {
       setUpdateProgress(100)
     }
 
-    window.ipcRenderer?.on('update-can-available', handleUpdateAvailable)
-    window.ipcRenderer?.on('download-progress', handleDownloadProgress)
-    window.ipcRenderer?.on('update-downloaded', handleUpdateDownloaded)
+    window.ipcRenderer?.on(IPC_CHANNELS.UPDATE_CAN_AVAILABLE, handleUpdateAvailable)
+    window.ipcRenderer?.on(IPC_CHANNELS.DOWNLOAD_PROGRESS, handleDownloadProgress)
+    window.ipcRenderer?.on(IPC_CHANNELS.UPDATE_DOWNLOADED, handleUpdateDownloaded)
     return () => {
-      window.ipcRenderer?.off('update-can-available', handleUpdateAvailable)
-      window.ipcRenderer?.off('download-progress', handleDownloadProgress)
-      window.ipcRenderer?.off('update-downloaded', handleUpdateDownloaded)
+      window.ipcRenderer?.off(IPC_CHANNELS.UPDATE_CAN_AVAILABLE, handleUpdateAvailable)
+      window.ipcRenderer?.off(IPC_CHANNELS.DOWNLOAD_PROGRESS, handleDownloadProgress)
+      window.ipcRenderer?.off(IPC_CHANNELS.UPDATE_DOWNLOADED, handleUpdateDownloaded)
     }
   }, [])
 
@@ -191,6 +179,7 @@ function App() {
 
   const {
     isModelLoaded,
+    modelError,
     detectionState,
     isNearHead,
     progress: detectionProgress,
@@ -228,7 +217,7 @@ function App() {
   function handleAlert() {
     setShowAlert(true)
 
-    window.ipcRenderer?.invoke('show-fullscreen-alert', {
+    safeInvoke(IPC_CHANNELS.SHOW_FULLSCREEN_ALERT, {
       canDismiss: false,
       activeZone,
       language,
@@ -269,7 +258,7 @@ function App() {
       const handNear = isHandNearHead()
       const elapsedTime = Date.now() - alertStartTimeRef.current
 
-      window.ipcRenderer?.invoke('update-alert-data', {
+      safeInvoke(IPC_CHANNELS.UPDATE_ALERT_DATA, {
         canDismiss: !handNear && elapsedTime >= MINIMUM_ALERT_DURATION,
         activeZone,
         language,
@@ -286,7 +275,7 @@ function App() {
         // Only hide alert after hand has been away for sustained period
         if (consecutiveNotNearCountRef.current >= REQUIRED_CONSECUTIVE_FRAMES) {
           setShowAlert(false)
-          window.ipcRenderer?.invoke('hide-fullscreen-alert')
+          safeInvoke(IPC_CHANNELS.HIDE_FULLSCREEN_ALERT)
           clearInterval(checkInterval)
         }
       } else {
@@ -303,15 +292,15 @@ function App() {
     // This prevents the alert from flickering when cooldown ends but hand is still touching
     if (showAlert && detectionState === 'IDLE' && !isHandNearHead()) {
       setShowAlert(false)
-      window.ipcRenderer?.invoke('hide-fullscreen-alert')
+      safeInvoke(IPC_CHANNELS.HIDE_FULLSCREEN_ALERT)
     }
   }, [showAlert, detectionState, isHandNearHead])
 
   useEffect(() => {
     const handleAlertDismissed = () => setShowAlert(false)
-    window.ipcRenderer?.on('alert-dismissed', handleAlertDismissed)
+    window.ipcRenderer?.on(IPC_CHANNELS.ALERT_DISMISSED, handleAlertDismissed)
     return () => {
-      window.ipcRenderer?.off('alert-dismissed', handleAlertDismissed)
+      window.ipcRenderer?.off(IPC_CHANNELS.ALERT_DISMISSED, handleAlertDismissed)
     }
   }, [])
 
@@ -418,7 +407,7 @@ function App() {
                 </span>
                 <button
                   className="update-banner-action-btn install"
-                  onClick={() => window.ipcRenderer?.invoke('quit-and-install')}
+                  onClick={() => safeInvoke(IPC_CHANNELS.QUIT_AND_INSTALL)}
                 >
                   {t.updateInstall}
                 </button>
@@ -444,7 +433,7 @@ function App() {
                   onClick={(e) => {
                     e.stopPropagation()
                     setUpdateDownloading(true)
-                    window.ipcRenderer?.invoke('start-download')
+                    safeInvoke(IPC_CHANNELS.START_DOWNLOAD)
                   }}
                 >
                   {t.updateDownload}
@@ -539,9 +528,10 @@ function App() {
       </footer>
 
       {/* Error */}
-      {cameraError && (
+      {(cameraError || modelError) && (
         <div className="error-toast">
-          {t.cameraError}: {cameraError}
+          {cameraError && <div>{t.cameraError}: {cameraError}</div>}
+          {modelError && <div>{t.controlLoading} {modelError}</div>}
         </div>
       )}
 

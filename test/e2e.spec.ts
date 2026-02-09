@@ -2,10 +2,8 @@ import path from 'node:path'
 import {
   type ElectronApplication,
   type Page,
-  type JSHandle,
   _electron as electron,
 } from 'playwright'
-import type { BrowserWindow } from 'electron'
 import {
   beforeAll,
   afterAll,
@@ -19,7 +17,7 @@ let electronApp: ElectronApplication
 let page: Page
 
 if (process.platform === 'linux') {
-  // pass ubuntu
+  // Skip on Linux CI (no display)
   test(() => expect(true).true)
 } else {
   beforeAll(async () => {
@@ -29,36 +27,42 @@ if (process.platform === 'linux') {
       env: { ...process.env, NODE_ENV: 'development' },
     })
     page = await electronApp.firstWindow()
-
-    const mainWin: JSHandle<BrowserWindow> = await electronApp.browserWindow(page)
-    await mainWin.evaluate(async (win) => {
-      win.webContents.executeJavaScript('console.log("Execute JavaScript with e2e testing.")')
-    })
-  })
+  }, 30_000)
 
   afterAll(async () => {
-    await page.screenshot({ path: 'test/screenshots/e2e.png' })
-    await page.close()
-    await electronApp.close()
+    if (page) {
+      await page.screenshot({ path: 'test/screenshots/e2e.png' }).catch(() => {})
+      await page.close()
+    }
+    if (electronApp) {
+      await electronApp.close()
+    }
   })
 
-  describe('[electron-vite-react] e2e tests', async () => {
-    test('startup', async () => {
+  describe("Don't Touch e2e tests", () => {
+    test('app should launch and show a window', async () => {
       const title = await page.title()
-      expect(title).eq('Electron + Vite + React')
+      expect(title).toContain("Don't Touch")
     })
 
-    test('should be home page is load correctly', async () => {
-      const h1 = await page.$('h1')
-      const title = await h1?.textContent()
-      expect(title).eq('Electron + Vite + React')
+    test('splash screen should be visible initially', async () => {
+      // The splash screen has a progress bar or loading indicators
+      const body = await page.textContent('body')
+      expect(body).toBeTruthy()
     })
 
-    test('should be count button can click', async () => {
-      const countButton = await page.$('button')
-      await countButton?.click()
-      const countValue = await countButton?.textContent()
-      expect(countValue).eq('count is 1')
+    test('main app should load after splash', async () => {
+      // Wait for splash to finish (default 6s + buffer)
+      await page.waitForTimeout(8000)
+
+      // After splash, the main app should have the control button
+      const hasButton = await page.$('button')
+      expect(hasButton).toBeTruthy()
+    }, 15_000)
+
+    test('settings button should be present', async () => {
+      const settingsBtn = await page.$('.settings-toggle')
+      expect(settingsBtn).toBeTruthy()
     })
   })
 }

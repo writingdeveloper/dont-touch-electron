@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 
 interface AlertOverlayProps {
@@ -10,6 +10,12 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
   const { t } = useLanguage()
   const [isShaking, setIsShaking] = useState(false)
   const [showHint, setShowHint] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  // Auto-focus on mount for accessibility
+  useEffect(() => {
+    overlayRef.current?.focus()
+  }, [])
 
   const handleDismiss = useCallback(() => {
     if (canDismiss) {
@@ -35,24 +41,29 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
 
   return (
     <div
+      ref={overlayRef}
       className="alert-overlay-fullscreen"
       onClick={handleDismiss}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="alert-title"
+      tabIndex={-1}
     >
       {/* Animated background lines */}
-      <div className="alert-bg-lines" />
+      <div className="alert-bg-lines" aria-hidden="true" />
 
       {/* Corner brackets */}
-      <div className="alert-corner top-left" />
-      <div className="alert-corner top-right" />
-      <div className="alert-corner bottom-left" />
-      <div className="alert-corner bottom-right" />
+      <div className="alert-corner top-left" aria-hidden="true" />
+      <div className="alert-corner top-right" aria-hidden="true" />
+      <div className="alert-corner bottom-left" aria-hidden="true" />
+      <div className="alert-corner bottom-right" aria-hidden="true" />
 
       <div className={`alert-content-fullscreen ${isShaking ? 'shake' : ''}`}>
         <div className="alert-warning-badge">
           <span className="badge-text">{t.alertWarning}</span>
         </div>
 
-        <div className="alert-icon-container">
+        <div className="alert-icon-container" aria-hidden="true">
           <svg className="alert-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
@@ -60,10 +71,10 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
           </svg>
         </div>
 
-        <h1 className="alert-title">{t.alertTitle}</h1>
+        <h1 id="alert-title" className="alert-title">{t.alertTitle}</h1>
         <p className="alert-subtitle">{t.alertSubtitle}</p>
 
-        <div className="alert-status">
+        <div className="alert-status" role="status" aria-live="assertive">
           <div className="status-line">
             <span className="status-label">{t.alertStatus}:</span>
             <span className="status-value danger">{t.alertViolation}</span>
@@ -266,7 +277,7 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
 
         .alert-subtitle {
           font-size: 18px;
-          color: #ffaaaa;
+          color: #ffbbbb;
           margin: 0 0 40px 0;
           letter-spacing: 1px;
         }
@@ -290,7 +301,7 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
         }
 
         .status-label {
-          color: #888;
+          color: #aaa;
           letter-spacing: 1px;
         }
 
@@ -301,7 +312,7 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
         }
 
         .status-value.danger {
-          color: #ff4444;
+          color: #ff6b6b;
           animation: blink 0.5s ease-in-out infinite;
         }
 

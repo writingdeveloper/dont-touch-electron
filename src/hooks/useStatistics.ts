@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { StatisticsService } from '../services/StatisticsService'
 import {
   TouchEvent,
@@ -6,6 +6,7 @@ import {
   HabitSettings,
   UserProgress,
   ExportData,
+  getTodayDateString,
 } from '../types/statistics'
 import { DetectionZone } from '../detection/types'
 
@@ -116,13 +117,21 @@ export function useStatistics(): UseStatisticsReturn {
     refresh()
   }, [refresh])
 
-  // Refresh periodically and on window focus
+  // Refresh on window focus and detect day changes
+  const lastDateRef = useRef(getTodayDateString())
+
   useEffect(() => {
     const handleFocus = () => refresh()
     window.addEventListener('focus', handleFocus)
 
-    // Check for day change every minute
-    const interval = setInterval(refresh, 60000)
+    // Check for day change every minute (lightweight string comparison)
+    const interval = setInterval(() => {
+      const today = getTodayDateString()
+      if (today !== lastDateRef.current) {
+        lastDateRef.current = today
+        refresh()
+      }
+    }, 60000)
 
     return () => {
       window.removeEventListener('focus', handleFocus)

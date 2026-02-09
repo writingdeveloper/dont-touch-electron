@@ -106,9 +106,9 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
   }
 
   return (
-    <div className="calendar-overlay" onClick={onClose}>
+    <div className="calendar-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
       <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="calendar-header">
+        <div className="calendar-header" id="calendar-modal-title">
           <button className="nav-btn" onClick={goToPrevMonth}>&lt;</button>
           <div className="month-title">
             <span>{monthName}</span>

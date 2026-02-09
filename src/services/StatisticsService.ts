@@ -15,10 +15,13 @@ import {
 } from '../types/statistics'
 import { DetectionZone } from '../detection/types'
 
-const STORAGE_KEY = 'dont-touch-statistics'
+import { STORAGE_KEYS } from '../constants/storage-keys'
+import { logger } from '../utils/logger'
+
+const STORAGE_KEY = STORAGE_KEYS.STATISTICS
 const MAX_DAILY_STATS_DAYS = 90
 
-class StatisticsServiceClass {
+export class StatisticsServiceClass {
   private state: StatisticsState
 
   constructor() {
@@ -31,12 +34,12 @@ class StatisticsServiceClass {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored)
+        const parsed = JSON.parse(stored) as Record<string, unknown>
         // Validate and migrate if needed
         return this.validateState(parsed)
       }
     } catch (error) {
-      console.error('Failed to load statistics from storage:', error)
+      logger.error('Failed to load statistics from storage:', error)
     }
 
     // Return default state
@@ -50,13 +53,23 @@ class StatisticsServiceClass {
   }
 
   // Validate and migrate stored state
-  private validateState(stored: any): StatisticsState {
+  private validateState(stored: Record<string, unknown>): StatisticsState {
+    const settings = typeof stored.settings === 'object' && stored.settings !== null
+      ? stored.settings as Record<string, unknown>
+      : {}
+    const progress = typeof stored.progress === 'object' && stored.progress !== null
+      ? stored.progress as Record<string, unknown>
+      : {}
+    const lastMeditation = typeof stored.lastMeditationRecommendedAt === 'number'
+      ? stored.lastMeditationRecommendedAt
+      : null
+
     return {
       todayEvents: Array.isArray(stored.todayEvents) ? stored.todayEvents : [],
       dailyStats: Array.isArray(stored.dailyStats) ? stored.dailyStats : [],
-      settings: { ...DEFAULT_HABIT_SETTINGS, ...stored.settings },
-      progress: { ...DEFAULT_PROGRESS, ...stored.progress },
-      lastMeditationRecommendedAt: stored.lastMeditationRecommendedAt ?? null,
+      settings: { ...DEFAULT_HABIT_SETTINGS, ...settings },
+      progress: { ...DEFAULT_PROGRESS, ...progress },
+      lastMeditationRecommendedAt: lastMeditation,
     }
   }
 
@@ -65,7 +78,7 @@ class StatisticsServiceClass {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state))
     } catch (error) {
-      console.error('Failed to save statistics to storage:', error)
+      logger.error('Failed to save statistics to storage:', error)
     }
   }
 
@@ -108,6 +121,24 @@ class StatisticsServiceClass {
     }
   }
 
+  // Aggregate touch events into a DailyStats object
+  private aggregateEvents(stats: DailyStats, events: TouchEvent[]): void {
+    for (const event of events) {
+      stats.touchCount++
+      stats.totalDuration += event.duration
+
+      const hour = new Date(event.timestamp).getHours()
+      stats.touchesByHour[hour]++
+
+      if (!stats.firstTouch || event.timestamp < stats.firstTouch) {
+        stats.firstTouch = event.timestamp
+      }
+      if (!stats.lastTouch || event.timestamp > stats.lastTouch) {
+        stats.lastTouch = event.timestamp
+      }
+    }
+  }
+
   // Archive events to daily stats
   private archiveEventsToDaily(date: string, events: TouchEvent[]): void {
     let dailyStats = this.state.dailyStats.find(d => d.date === date)
@@ -117,20 +148,7 @@ class StatisticsServiceClass {
       this.state.dailyStats.push(dailyStats)
     }
 
-    for (const event of events) {
-      dailyStats.touchCount++
-      dailyStats.totalDuration += event.duration
-
-      const hour = new Date(event.timestamp).getHours()
-      dailyStats.touchesByHour[hour]++
-
-      if (!dailyStats.firstTouch || event.timestamp < dailyStats.firstTouch) {
-        dailyStats.firstTouch = event.timestamp
-      }
-      if (!dailyStats.lastTouch || event.timestamp > dailyStats.lastTouch) {
-        dailyStats.lastTouch = event.timestamp
-      }
-    }
+    this.aggregateEvents(dailyStats, events)
 
     // Keep only last N days
     this.state.dailyStats.sort((a, b) => b.date.localeCompare(a.date))
@@ -242,20 +260,7 @@ class StatisticsServiceClass {
     const today = getTodayDateString()
     const stats = createEmptyDailyStats(today)
 
-    for (const event of this.state.todayEvents) {
-      stats.touchCount++
-      stats.totalDuration += event.duration
-
-      const hour = new Date(event.timestamp).getHours()
-      stats.touchesByHour[hour]++
-
-      if (!stats.firstTouch || event.timestamp < stats.firstTouch) {
-        stats.firstTouch = event.timestamp
-      }
-      if (!stats.lastTouch || event.timestamp > stats.lastTouch) {
-        stats.lastTouch = event.timestamp
-      }
-    }
+    this.aggregateEvents(stats, this.state.todayEvents)
 
     // Add meditation stats from archived today if exists
     const archivedToday = this.state.dailyStats.find(d => d.date === today)
@@ -350,20 +355,34 @@ class StatisticsServiceClass {
   // Import data
   importData(data: ExportData): boolean {
     try {
-      if (!data.version || !data.dailyStats) {
-        throw new Error('Invalid export data format')
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid export data: not an object')
       }
+      if (typeof data.version !== 'string' || !data.version) {
+        throw new Error('Invalid export data: missing version')
+      }
+      if (!Array.isArray(data.dailyStats)) {
+        throw new Error('Invalid export data: dailyStats is not an array')
+      }
+
+      // Validate dailyStats entries
+      const validatedStats = data.dailyStats.filter(stat => {
+        if (!stat || typeof stat !== 'object') return false
+        if (typeof stat.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(stat.date)) return false
+        if (typeof stat.touchCount !== 'number' || stat.touchCount < 0) return false
+        return true
+      })
 
       this.state.settings = { ...DEFAULT_HABIT_SETTINGS, ...data.settings }
       this.state.progress = { ...DEFAULT_PROGRESS, ...data.progress }
-      this.state.dailyStats = data.dailyStats
+      this.state.dailyStats = validatedStats
       this.state.todayEvents = [] // Don't import today's events
       this.state.lastMeditationRecommendedAt = null
 
       this.saveToStorage()
       return true
     } catch (error) {
-      console.error('Failed to import data:', error)
+      logger.error('Failed to import data:', error)
       return false
     }
   }

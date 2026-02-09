@@ -15,8 +15,10 @@ export function Controls({ isRunning, isModelLoaded, onToggle }: ControlsProps) 
         className={`control-button ${isRunning ? 'stop' : 'start'}`}
         onClick={onToggle}
         disabled={!isModelLoaded}
+        aria-pressed={isRunning}
+        aria-label={isRunning ? t.controlStop : t.controlStart}
       >
-        <span className="button-icon">
+        <span className="button-icon" aria-hidden="true">
           {isRunning ? (
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <rect x="3" y="3" width="10" height="10" rx="1" />
@@ -31,8 +33,8 @@ export function Controls({ isRunning, isModelLoaded, onToggle }: ControlsProps) 
       </button>
 
       {!isModelLoaded && (
-        <div className="loading-indicator">
-          <div className="loading-spinner" />
+        <div className="loading-indicator" role="status" aria-busy="true">
+          <div className="loading-spinner" aria-hidden="true" />
           <span className="loading-text">{t.controlLoading}</span>
         </div>
       )}
@@ -87,7 +89,7 @@ export function Controls({ isRunning, isModelLoaded, onToggle }: ControlsProps) 
 
         .control-button:disabled {
           background: #374151;
-          color: #6b7280;
+          color: #9ca3af;
           cursor: not-allowed;
         }
 

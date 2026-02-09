@@ -1,21 +1,77 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+// IPC channel whitelists for security
+// Renderer → Main (send)
+const ALLOWED_SEND_CHANNELS = new Set([
+  'debug-log',
+  'close-alert-window',
+  'set-language',
+])
+
+// Renderer → Main (invoke, expects response)
+const ALLOWED_INVOKE_CHANNELS = new Set([
+  'show-fullscreen-alert',
+  'hide-fullscreen-alert',
+  'update-alert-data',
+  'get-app-settings',
+  'set-app-settings',
+  'get-app-version',
+  'check-update',
+  'check-update-silent',
+  'start-download',
+  'quit-and-install',
+  'window-minimize',
+  'window-close',
+  'window-hide',
+  'window-quit',
+  'track-event',
+  'open-external',
+  'open-win',
+])
+
+// Main → Renderer (receive)
+const ALLOWED_RECEIVE_CHANNELS = new Set([
+  'alert-data',
+  'alert-dismissed',
+  'update-can-available',
+  'download-progress',
+  'update-downloaded',
+  'update-error',
+  'toggle-detection',
+  'main-process-message',
+])
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
+    if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
+      console.warn(`[Preload] Blocked receive on unauthorized channel: ${channel}`)
+      return ipcRenderer
+    }
     return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
   },
   off(...args: Parameters<typeof ipcRenderer.off>) {
     const [channel, ...omit] = args
+    if (!ALLOWED_RECEIVE_CHANNELS.has(channel)) {
+      return ipcRenderer
+    }
     return ipcRenderer.off(channel, ...omit)
   },
   send(...args: Parameters<typeof ipcRenderer.send>) {
     const [channel, ...omit] = args
+    if (!ALLOWED_SEND_CHANNELS.has(channel)) {
+      console.warn(`[Preload] Blocked send on unauthorized channel: ${channel}`)
+      return
+    }
     return ipcRenderer.send(channel, ...omit)
   },
   invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
     const [channel, ...omit] = args
+    if (!ALLOWED_INVOKE_CHANNELS.has(channel)) {
+      console.warn(`[Preload] Blocked invoke on unauthorized channel: ${channel}`)
+      return Promise.reject(new Error(`Unauthorized IPC channel: ${channel}`))
+    }
     return ipcRenderer.invoke(channel, ...omit)
   },
 

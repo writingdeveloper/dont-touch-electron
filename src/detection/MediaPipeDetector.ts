@@ -7,6 +7,8 @@ import {
   NormalizedLandmark,
 } from '@mediapipe/tasks-vision';
 import { DetectionResult, HandKeypoints, HeadRegion, Point, FaceLandmarks } from './types';
+import { MEDIAPIPE_URLS } from '../constants/mediapipe';
+import { logger } from '../utils/logger';
 
 // Hand landmark indices
 const HAND_LANDMARK = {
@@ -61,15 +63,13 @@ export class MediaPipeDetector {
 
     try {
       onProgress?.(10, 'Loading WASM runtime...');
-      const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-      );
+      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_URLS.WASM_RUNTIME);
 
       // Helper functions to create landmarkers with GPU/CPU fallback
       const createFaceLandmarker = async (delegate: 'GPU' | 'CPU') => {
         return FaceLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            modelAssetPath: MEDIAPIPE_URLS.FACE_LANDMARKER_MODEL,
             delegate,
           },
           runningMode: 'VIDEO',
@@ -83,7 +83,7 @@ export class MediaPipeDetector {
       const createHandLandmarker = async (delegate: 'GPU' | 'CPU') => {
         return HandLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            modelAssetPath: MEDIAPIPE_URLS.HAND_LANDMARKER_MODEL,
             delegate,
           },
           runningMode: 'VIDEO',
@@ -99,7 +99,7 @@ export class MediaPipeDetector {
       try {
         this.faceLandmarker = await createFaceLandmarker('GPU');
       } catch (gpuError) {
-        console.warn('GPU acceleration failed for face detection, falling back to CPU');
+        logger.warn('GPU acceleration failed for face detection, falling back to CPU');
         this.faceLandmarker = await createFaceLandmarker('CPU');
       }
 
@@ -108,7 +108,7 @@ export class MediaPipeDetector {
       try {
         this.handLandmarker = await createHandLandmarker('GPU');
       } catch (gpuError) {
-        console.warn('GPU acceleration failed for hand detection, falling back to CPU');
+        logger.warn('GPU acceleration failed for hand detection, falling back to CPU');
         this.handLandmarker = await createHandLandmarker('CPU');
       }
 
@@ -117,7 +117,7 @@ export class MediaPipeDetector {
       onProgress?.(100, 'Ready!');
     } catch (error) {
       this.isLoading = false;
-      console.error('Failed to load MediaPipe models:', error);
+      logger.error('Failed to load MediaPipe models:', error);
       throw error;
     }
   }
@@ -144,7 +144,7 @@ export class MediaPipeDetector {
       const result = this.processResults(faceResults, handResults, width, height);
       return { ...result, inferenceTime: performance.now() - startTime };
     } catch (error) {
-      console.error('Detection error:', error);
+      logger.error('Detection error:', error);
       return { hands: [], head: null, keypoints: [], faceLandmarks: null, inferenceTime: performance.now() - startTime };
     }
   }
@@ -168,12 +168,15 @@ export class MediaPipeDetector {
         confidence: 1.0,
       });
 
-      const allX = landmarks.map(l => l.x * width);
-      const allY = landmarks.map(l => l.y * height);
-      const minX = Math.min(...allX);
-      const maxX = Math.max(...allX);
-      const minY = Math.min(...allY);
-      const maxY = Math.max(...allY);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const l of landmarks) {
+        const px = l.x * width;
+        const py = l.y * height;
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+      }
 
       const headWidth = (maxX - minX) * 1.3;
       const headHeight = (maxY - minY) * 1.4;
@@ -224,6 +227,9 @@ export class MediaPipeDetector {
           confidence: 1.0,
         }));
 
+        // Ensure we have enough landmarks for fingertip access
+        if (points.length <= HAND_LANDMARK.PINKY_TIP) continue;
+
         hands.push({
           landmarks: points,
           handedness: handedness[0].categoryName as 'Left' | 'Right',
@@ -256,6 +262,7 @@ export class MediaPipeDetector {
       ctx.beginPath();
       for (let i = 0; i < faceOvalIndices.length; i++) {
         const point = faceLandmarks.all[faceOvalIndices[i]];
+        if (!point) continue;
         if (i === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       }
