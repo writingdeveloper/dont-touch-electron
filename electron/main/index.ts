@@ -18,22 +18,34 @@ interface AppSettings {
   startMinimized: boolean
 }
 
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  autoStart: false,
+  minimizeToTray: true,
+  startMinimized: false,
+}
+
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
 
 function loadAppSettings(): AppSettings {
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
       const data = fs.readFileSync(APP_SETTINGS_FILE, 'utf-8')
-      return JSON.parse(data)
+      const parsed = JSON.parse(data)
+      // Merge over defaults and coerce types: a partial/corrupt/older-schema file
+      // must not leave fields undefined, which would silently break the
+      // close/minimize-to-tray behavior that branches on these booleans.
+      if (parsed && typeof parsed === 'object') {
+        return {
+          autoStart: Boolean(parsed.autoStart ?? DEFAULT_APP_SETTINGS.autoStart),
+          minimizeToTray: Boolean(parsed.minimizeToTray ?? DEFAULT_APP_SETTINGS.minimizeToTray),
+          startMinimized: Boolean(parsed.startMinimized ?? DEFAULT_APP_SETTINGS.startMinimized),
+        }
+      }
     }
   } catch (err) {
     console.error('Failed to load app settings:', err)
   }
-  return {
-    autoStart: false,
-    minimizeToTray: true,
-    startMinimized: false,
-  }
+  return { ...DEFAULT_APP_SETTINGS }
 }
 
 function saveAppSettings(settings: AppSettings): void {
@@ -104,6 +116,7 @@ const VALID_ANALYTICS_EVENTS = new Set([
   'meditation_started',
   'meditation_completed',
   'settings_changed',
+  'error_boundary_caught',
 ])
 
 const preload = path.join(__dirname, '../preload/index.js')

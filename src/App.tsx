@@ -191,10 +191,18 @@ function App() {
 
   useEffect(() => {
     if (detectionState === 'DETECTING') {
-      detectingStartTimeRef.current = Date.now()
-    } else if (detectionState === 'ALERT' && detectingStartTimeRef.current) {
+      // Set the start time once, when detection begins — NOT on every activeZone
+      // change (the fingertip drifts across zones each frame, which previously kept
+      // resetting this ref and under-reported the touch duration).
+      if (detectingStartTimeRef.current === null) {
+        detectingStartTimeRef.current = Date.now()
+      }
+    } else if (detectionState === 'ALERT' && detectingStartTimeRef.current !== null) {
       const duration = Date.now() - detectingStartTimeRef.current
       recordTouch(duration, activeZone)
+      detectingStartTimeRef.current = null
+    } else if (detectionState === 'IDLE' || detectionState === 'COOLDOWN') {
+      // Detection ended (with or without an alert) — reset for the next cycle.
       detectingStartTimeRef.current = null
     }
   }, [detectionState, activeZone, recordTouch])
@@ -306,6 +314,18 @@ function App() {
       setIsRunning(true)
     }
   }, [isRunning, startCamera, stopCamera, stopDetection])
+
+  // Tray "Start/Stop Detection" sends this; mirror the in-app toggle so the tray
+  // control actually starts/stops detection (it previously had no renderer listener).
+  useEffect(() => {
+    const handleToggleDetection = (_event: Electron.IpcRendererEvent, shouldStart: boolean) => {
+      if (shouldStart !== isRunning) void handleToggle()
+    }
+    window.ipcRenderer?.on(IPC_CHANNELS.TOGGLE_DETECTION, handleToggleDetection)
+    return () => {
+      window.ipcRenderer?.off(IPC_CHANNELS.TOGGLE_DETECTION, handleToggleDetection)
+    }
+  }, [isRunning, handleToggle])
 
   useEffect(() => {
     if (stream && videoRef.current) {
