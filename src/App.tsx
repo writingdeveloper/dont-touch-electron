@@ -16,6 +16,7 @@ import { STORAGE_KEYS } from './constants/storage-keys'
 import { IPC_CHANNELS } from './constants/ipc-channels'
 import { safeInvoke } from './utils/ipc'
 import { AlertSoundService } from './audio/AlertSoundService'
+import { PRESET_BASE_URL } from './audio/soundPresets'
 import { resolveCustomSoundUrl } from './audio/customSoundStorage'
 import './App.css'
 
@@ -29,7 +30,7 @@ function App() {
   const { t, language } = useLanguage()
   const alertSoundServiceRef = useRef(
     new AlertSoundService({
-      presetBaseUrl: '/sounds/',
+      presetBaseUrl: PRESET_BASE_URL,
       resolveCustomSoundUrl,
     })
   )
@@ -206,7 +207,7 @@ function App() {
     if (window.ipcRenderer) {
       new Notification(t.appTitle, {
         body: t.alertSubtitle,
-        icon: '/favicon.ico'
+        icon: './favicon.ico'
       })
     }
 

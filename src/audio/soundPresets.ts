@@ -30,6 +30,11 @@ export const ALL_PRESETS: SoundPreset[] = [...TONE_PRESETS, ...VOICE_PRESETS]
 
 export const DEFAULT_PRESET_ID = 'tone-chime'
 
+// Base URL for built-in preset audio files (relative to the renderer document).
+// Must be relative: the packaged app loads the renderer over file://, where an
+// absolute "/sounds/" resolves to the filesystem root and every preset 404s.
+export const PRESET_BASE_URL = './sounds/'
+
 export function findPreset(id: string): SoundPreset | undefined {
   return ALL_PRESETS.find(p => p.id === id)
 }
