@@ -10,13 +10,13 @@
 
 Una aplicación de escritorio que usa tu cámara web para detectar en tiempo real cuando tu mano se acerca a tu cara. Ayuda a interrumpir comportamientos repetitivos como la **tricotilomanía** (arrancarse el pelo) y la **dermatilomanía** (rascarse la piel) mediante alertas visuales y sonoras.
 
-Todo el procesamiento ocurre localmente en tu dispositivo. No se recopilan ni transmiten datos.
+Todo el procesamiento de video ocurre localmente en tu dispositivo: las imágenes de tu cámara nunca salen de él. Solo se recopilan estadísticas de uso anónimas (sin datos personales ni imágenes) para mejorar la app.
 
 ## Características
 
 - Detección facial y de manos en tiempo real con MediaPipe
 - Zonas de detección personalizables (cuero cabelludo, cejas, ojos, mejillas, etc.)
-- Alertas a pantalla completa + sonido de advertencia
+- Alertas a pantalla completa con sonidos personalizables (tonos integrados, clips de voz multilingües o tu propio audio)
 - Estadísticas diarias y seguimiento de rachas
 - Meditación de respiración integrada
 - Soporte para bandeja del sistema
@@ -50,9 +50,9 @@ npm run build    # Build de producción
 
 ## Privacidad
 
-- Todo el procesamiento de video se ejecuta localmente
-- Las imágenes o datos no salen de tu dispositivo
-- Cumple con GDPR, CCPA, PIPEDA
+- Todo el procesamiento de video e imágenes se ejecuta localmente: los fotogramas de la cámara nunca salen de tu dispositivo
+- Solo se recopilan estadísticas de uso anónimas (p. ej., apertura de la app, inicio/parada de detección) para mejorar la app: sin datos personales, imágenes ni video
+- Los datos analíticos se tratan conforme a GDPR, CCPA y PIPEDA
 
 ## Licencia
 
