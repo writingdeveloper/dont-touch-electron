@@ -5,11 +5,14 @@ import os from 'node:os'
 import fs from 'node:fs'
 import { update } from './update'
 import { initialize as initAptabase, trackEvent } from '@aptabase/electron/main'
+import { registerCustomSoundScheme, registerCustomSoundIO } from './customSoundIO'
 
 // Initialize Aptabase analytics (self-hosted)
 initAptabase('A-SH-5688838680', {
   host: 'https://aptabase.devmanage.duckdns.org'
 })
+
+registerCustomSoundScheme()
 
 // App settings interface and storage
 interface AppSettings {
@@ -418,6 +421,7 @@ ipcMain.handle('track-event', (_, eventName: string, props?: Record<string, stri
 })
 
 app.whenReady().then(() => {
+  registerCustomSoundIO()
   createWindow()
   createTray()
   trackEvent('app_started')
