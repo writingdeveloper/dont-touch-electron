@@ -12,6 +12,11 @@ let currentWin: Electron.BrowserWindow | null = null
 // refresh the target window.
 let wired = false
 
+// Latest update-availability result, cached so a renderer that subscribes late
+// (App mounts only after the ~6s splash screen) can fetch it on demand instead
+// of missing the one-shot broadcast triggered by the splash's update check.
+let lastUpdateStatus: { update: boolean; version: string; newVersion?: string } | null = null
+
 export function update(win: Electron.BrowserWindow) {
   currentWin = win
 
@@ -31,7 +36,8 @@ export function update(win: Electron.BrowserWindow) {
   // update available
   autoUpdater.on('update-available', (info: UpdateInfo) => {
     console.log('Update available:', info.version)
-    currentWin?.webContents.send('update-can-available', { update: true, version: app.getVersion(), newVersion: info?.version })
+    lastUpdateStatus = { update: true, version: app.getVersion(), newVersion: info?.version }
+    currentWin?.webContents.send('update-can-available', lastUpdateStatus)
     trackAnalytics('update_available', {
       current_version: app.getVersion(),
       new_version: info?.version || 'unknown'
@@ -41,7 +47,8 @@ export function update(win: Electron.BrowserWindow) {
   // update not available
   autoUpdater.on('update-not-available', (info: UpdateInfo) => {
     console.log('No update available, current version:', app.getVersion())
-    currentWin?.webContents.send('update-can-available', { update: false, version: app.getVersion(), newVersion: info?.version })
+    lastUpdateStatus = { update: false, version: app.getVersion(), newVersion: info?.version }
+    currentWin?.webContents.send('update-can-available', lastUpdateStatus)
   })
 
   // download progress
@@ -89,6 +96,10 @@ export function update(win: Electron.BrowserWindow) {
       return { checked: false, reason: 'network-error' }
     }
   })
+
+  // Cached update-availability result, for renderers (e.g. App) that mount and
+  // subscribe only after the splash-screen check has already resolved.
+  ipcMain.handle('get-update-status', () => lastUpdateStatus)
 
   // Start downloading; progress, completion and errors flow back through the
   // listeners registered above.

@@ -126,6 +126,17 @@ function App() {
     window.ipcRenderer?.on(IPC_CHANNELS.UPDATE_CAN_AVAILABLE, handleUpdateAvailable)
     window.ipcRenderer?.on(IPC_CHANNELS.DOWNLOAD_PROGRESS, handleDownloadProgress)
     window.ipcRenderer?.on(IPC_CHANNELS.UPDATE_DOWNLOADED, handleUpdateDownloaded)
+
+    // The splash screen runs the update check before this component mounts, so
+    // the one-shot 'update-can-available' broadcast can fire with no listener.
+    // Fetch any result that resolved during the splash so the banner still shows.
+    window.ipcRenderer?.invoke(IPC_CHANNELS.GET_UPDATE_STATUS).then((info: UpdateInfo | null) => {
+      if (info?.update) {
+        setUpdateAvailable(info)
+        setShowAbout(true)
+      }
+    }).catch(() => {})
+
     return () => {
       window.ipcRenderer?.off(IPC_CHANNELS.UPDATE_CAN_AVAILABLE, handleUpdateAvailable)
       window.ipcRenderer?.off(IPC_CHANNELS.DOWNLOAD_PROGRESS, handleDownloadProgress)

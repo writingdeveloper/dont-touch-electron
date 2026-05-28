@@ -18,6 +18,7 @@ const ALLOWED_INVOKE_CHANNELS = new Set([
   'get-app-version',
   'check-update',
   'check-update-silent',
+  'get-update-status',
   'start-download',
   'quit-and-install',
   'window-minimize',

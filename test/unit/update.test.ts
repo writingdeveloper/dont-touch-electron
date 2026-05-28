@@ -82,4 +82,25 @@ describe('electron/main/update auto-updater wiring', () => {
     }).not.toThrow()
     expect((autoUpdater as any).listenerCount('update-available')).toBe(1)
   })
+
+  it('caches the last update availability so a late-mounting renderer can fetch it (splash-screen race fix)', async () => {
+    const { update } = await import('../../electron/main/update')
+    const { autoUpdater } = await import('electron-updater')
+    const { ipcMain } = await import('electron')
+
+    update(makeWin())
+    const getStatus = (ipcMain as any).__handlers.get('get-update-status')
+    expect(getStatus).toBeTypeOf('function')
+
+    // No check has resolved yet.
+    expect(getStatus()).toBeNull()
+
+    // An update is found during the splash, before App's listener exists.
+    ;(autoUpdater as any).emit('update-available', { version: '1.3.2' })
+    expect(getStatus()).toMatchObject({ update: true, newVersion: '1.3.2' })
+
+    // A subsequent "no update" result clears the pending flag.
+    ;(autoUpdater as any).emit('update-not-available', { version: '1.3.2' })
+    expect(getStatus()).toMatchObject({ update: false })
+  })
 })

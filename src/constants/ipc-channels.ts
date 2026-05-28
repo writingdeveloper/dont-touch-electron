@@ -25,6 +25,7 @@ export const IPC_CHANNELS = {
   // Updates
   CHECK_UPDATE: 'check-update',
   CHECK_UPDATE_SILENT: 'check-update-silent',
+  GET_UPDATE_STATUS: 'get-update-status',
   START_DOWNLOAD: 'start-download',
   QUIT_AND_INSTALL: 'quit-and-install',
   UPDATE_CAN_AVAILABLE: 'update-can-available',
