@@ -4,6 +4,8 @@ export interface AppSettings {
   startMinimized: boolean
   hidePreview: boolean
   closeAction: 'ask' | 'quit' | 'tray'
+  alertSoundId: string
+  alertVolume: number
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -12,4 +14,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   startMinimized: false,
   hidePreview: false,
   closeAction: 'ask',
+  alertSoundId: 'tone-chime',
+  alertVolume: 0.5,
 }
