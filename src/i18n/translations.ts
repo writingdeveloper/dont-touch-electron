@@ -218,6 +218,31 @@ export interface Translations {
   updateError: string;
   updateCurrent: string;
   updateNew: string;
+
+  // Sound settings
+  settingsTabSound: string;
+  settingsAlertSound: string;
+  settingsAlertSoundDesc: string;
+  settingsSoundCategoryTones: string;
+  settingsSoundCategoryVoices: string;
+  settingsSoundCategoryCustom: string;
+  settingsSoundAllLanguages: string;
+  settingsSoundPreview: string;
+  settingsSoundUpload: string;
+  settingsSoundUploadHint: string;
+  settingsSoundDelete: string;
+  settingsSoundVolume: string;
+
+  soundToneSoft: string;
+  soundToneChime: string;
+  soundToneBuzzer: string;
+  soundVoiceEnStop: string;
+  soundVoiceEnHandsDown: string;
+  soundVoiceKoStop: string;
+  soundVoiceJaStop: string;
+  soundVoiceZhStop: string;
+  soundVoiceEsStop: string;
+  soundVoiceRuStop: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -429,6 +454,30 @@ export const translations: Record<Language, Translations> = {
     updateError: 'Update check failed',
     updateCurrent: 'Current',
     updateNew: 'New',
+
+    settingsTabSound: 'Sound',
+    settingsAlertSound: 'Alert Sound',
+    settingsAlertSoundDesc: 'Choose what plays when a face touch is detected',
+    settingsSoundCategoryTones: 'Tones',
+    settingsSoundCategoryVoices: 'Voices',
+    settingsSoundCategoryCustom: 'Your sounds',
+    settingsSoundAllLanguages: 'All languages',
+    settingsSoundPreview: 'Preview',
+    settingsSoundUpload: 'Upload custom sound',
+    settingsSoundUploadHint: 'MP3, WAV, or OGG — up to 5 MB',
+    settingsSoundDelete: 'Delete',
+    settingsSoundVolume: 'Volume',
+
+    soundToneSoft: 'Soft chime',
+    soundToneChime: 'Chime',
+    soundToneBuzzer: 'Buzzer',
+    soundVoiceEnStop: '"Stop" (English)',
+    soundVoiceEnHandsDown: '"Hands down" (English)',
+    soundVoiceKoStop: '"손대지마" (Korean)',
+    soundVoiceJaStop: '"触らないで" (Japanese)',
+    soundVoiceZhStop: '"别碰" (Chinese)',
+    soundVoiceEsStop: '"No toques" (Spanish)',
+    soundVoiceRuStop: '"Стоп" (Russian)',
   },
 
   ko: {
@@ -639,6 +688,30 @@ export const translations: Record<Language, Translations> = {
     updateError: '업데이트 확인 실패',
     updateCurrent: '현재',
     updateNew: '최신',
+
+    settingsTabSound: '소리',
+    settingsAlertSound: '알림 소리',
+    settingsAlertSoundDesc: '얼굴 만짐 감지 시 재생될 소리를 선택하세요',
+    settingsSoundCategoryTones: '톤',
+    settingsSoundCategoryVoices: '음성',
+    settingsSoundCategoryCustom: '내 사운드',
+    settingsSoundAllLanguages: '모든 언어',
+    settingsSoundPreview: '미리듣기',
+    settingsSoundUpload: '사운드 업로드',
+    settingsSoundUploadHint: 'MP3, WAV, OGG — 최대 5MB',
+    settingsSoundDelete: '삭제',
+    settingsSoundVolume: '볼륨',
+
+    soundToneSoft: '부드러운 차임',
+    soundToneChime: '차임',
+    soundToneBuzzer: '버저',
+    soundVoiceEnStop: '"Stop" (영어)',
+    soundVoiceEnHandsDown: '"Hands down" (영어)',
+    soundVoiceKoStop: '"손대지마" (한국어)',
+    soundVoiceJaStop: '"触らないで" (일본어)',
+    soundVoiceZhStop: '"别碰" (중국어)',
+    soundVoiceEsStop: '"No toques" (스페인어)',
+    soundVoiceRuStop: '"Стоп" (러시아어)',
   },
 
   ja: {
@@ -849,6 +922,30 @@ export const translations: Record<Language, Translations> = {
     updateError: 'アップデート確認失敗',
     updateCurrent: '現在',
     updateNew: '最新',
+
+    settingsTabSound: 'サウンド',
+    settingsAlertSound: 'アラート音',
+    settingsAlertSoundDesc: '顔への接触を検出したときに再生する音を選択',
+    settingsSoundCategoryTones: 'トーン',
+    settingsSoundCategoryVoices: '音声',
+    settingsSoundCategoryCustom: 'マイサウンド',
+    settingsSoundAllLanguages: 'すべての言語',
+    settingsSoundPreview: 'プレビュー',
+    settingsSoundUpload: 'サウンドをアップロード',
+    settingsSoundUploadHint: 'MP3、WAV、OGG — 最大5MB',
+    settingsSoundDelete: '削除',
+    settingsSoundVolume: '音量',
+
+    soundToneSoft: 'ソフトチャイム',
+    soundToneChime: 'チャイム',
+    soundToneBuzzer: 'ブザー',
+    soundVoiceEnStop: '"Stop" (英語)',
+    soundVoiceEnHandsDown: '"Hands down" (英語)',
+    soundVoiceKoStop: '"손대지마" (韓国語)',
+    soundVoiceJaStop: '"触らないで" (日本語)',
+    soundVoiceZhStop: '"别碰" (中国語)',
+    soundVoiceEsStop: '"No toques" (スペイン語)',
+    soundVoiceRuStop: '"Стоп" (ロシア語)',
   },
 
   zh: {
@@ -1059,6 +1156,30 @@ export const translations: Record<Language, Translations> = {
     updateError: '检查更新失败',
     updateCurrent: '当前',
     updateNew: '最新',
+
+    settingsTabSound: '声音',
+    settingsAlertSound: '提醒声音',
+    settingsAlertSoundDesc: '选择检测到触摸面部时播放的声音',
+    settingsSoundCategoryTones: '音调',
+    settingsSoundCategoryVoices: '语音',
+    settingsSoundCategoryCustom: '我的声音',
+    settingsSoundAllLanguages: '所有语言',
+    settingsSoundPreview: '试听',
+    settingsSoundUpload: '上传自定义声音',
+    settingsSoundUploadHint: 'MP3、WAV或OGG — 最大5MB',
+    settingsSoundDelete: '删除',
+    settingsSoundVolume: '音量',
+
+    soundToneSoft: '柔和提示音',
+    soundToneChime: '提示音',
+    soundToneBuzzer: '蜂鸣器',
+    soundVoiceEnStop: '"Stop" (英语)',
+    soundVoiceEnHandsDown: '"Hands down" (英语)',
+    soundVoiceKoStop: '"손대지마" (韩语)',
+    soundVoiceJaStop: '"触らないで" (日语)',
+    soundVoiceZhStop: '"别碰" (中文)',
+    soundVoiceEsStop: '"No toques" (西班牙语)',
+    soundVoiceRuStop: '"Стоп" (俄语)',
   },
 
   es: {
@@ -1269,6 +1390,30 @@ export const translations: Record<Language, Translations> = {
     updateError: 'Error al buscar actualizaciones',
     updateCurrent: 'Actual',
     updateNew: 'Nuevo',
+
+    settingsTabSound: 'Sonido',
+    settingsAlertSound: 'Sonido de alerta',
+    settingsAlertSoundDesc: 'Elige qué se reproduce al detectar un toque facial',
+    settingsSoundCategoryTones: 'Tonos',
+    settingsSoundCategoryVoices: 'Voces',
+    settingsSoundCategoryCustom: 'Mis sonidos',
+    settingsSoundAllLanguages: 'Todos los idiomas',
+    settingsSoundPreview: 'Vista previa',
+    settingsSoundUpload: 'Subir sonido personalizado',
+    settingsSoundUploadHint: 'MP3, WAV u OGG — hasta 5 MB',
+    settingsSoundDelete: 'Eliminar',
+    settingsSoundVolume: 'Volumen',
+
+    soundToneSoft: 'Campana suave',
+    soundToneChime: 'Campana',
+    soundToneBuzzer: 'Zumbador',
+    soundVoiceEnStop: '"Stop" (Inglés)',
+    soundVoiceEnHandsDown: '"Hands down" (Inglés)',
+    soundVoiceKoStop: '"손대지마" (Coreano)',
+    soundVoiceJaStop: '"触らないで" (Japonés)',
+    soundVoiceZhStop: '"别碰" (Chino)',
+    soundVoiceEsStop: '"No toques" (Español)',
+    soundVoiceRuStop: '"Стоп" (Ruso)',
   },
 
   ru: {
@@ -1479,6 +1624,30 @@ export const translations: Record<Language, Translations> = {
     updateError: 'Ошибка проверки обновлений',
     updateCurrent: 'Текущая',
     updateNew: 'Новая',
+
+    settingsTabSound: 'Звук',
+    settingsAlertSound: 'Звук уведомления',
+    settingsAlertSoundDesc: 'Выберите, что воспроизводить при обнаружении касания лица',
+    settingsSoundCategoryTones: 'Тоны',
+    settingsSoundCategoryVoices: 'Голос',
+    settingsSoundCategoryCustom: 'Свои звуки',
+    settingsSoundAllLanguages: 'Все языки',
+    settingsSoundPreview: 'Прослушать',
+    settingsSoundUpload: 'Загрузить свой звук',
+    settingsSoundUploadHint: 'MP3, WAV или OGG — до 5 МБ',
+    settingsSoundDelete: 'Удалить',
+    settingsSoundVolume: 'Громкость',
+
+    soundToneSoft: 'Мягкий звон',
+    soundToneChime: 'Звон',
+    soundToneBuzzer: 'Зуммер',
+    soundVoiceEnStop: '"Stop" (Английский)',
+    soundVoiceEnHandsDown: '"Hands down" (Английский)',
+    soundVoiceKoStop: '"손대지마" (Корейский)',
+    soundVoiceJaStop: '"触らないで" (Японский)',
+    soundVoiceZhStop: '"别碰" (Китайский)',
+    soundVoiceEsStop: '"No toques" (Испанский)',
+    soundVoiceRuStop: '"Стоп" (Русский)',
   },
 };
 
