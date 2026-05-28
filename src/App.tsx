@@ -15,35 +15,9 @@ import { AppSettings, DEFAULT_APP_SETTINGS } from './types/app-settings'
 import { STORAGE_KEYS } from './constants/storage-keys'
 import { IPC_CHANNELS } from './constants/ipc-channels'
 import { safeInvoke } from './utils/ipc'
+import { AlertSoundService } from './audio/AlertSoundService'
+import { resolveCustomSoundUrl } from './audio/customSoundStorage'
 import './App.css'
-
-// Play alert sound with Web Audio API fallback
-function playAlertSound() {
-  const audio = new Audio('/alert.wav')
-  audio.volume = 0.5
-
-  audio.play().catch(() => {
-    try {
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-
-      oscillator.frequency.value = 800
-      oscillator.type = 'sine'
-
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
-
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + 0.3)
-    } catch {
-      // Silent fallback if audio fails
-    }
-  })
-}
 
 interface UpdateInfo {
   update: boolean
@@ -53,6 +27,12 @@ interface UpdateInfo {
 
 function App() {
   const { t, language } = useLanguage()
+  const alertSoundServiceRef = useRef(
+    new AlertSoundService({
+      presetBaseUrl: '/sounds/',
+      resolveCustomSoundUrl,
+    })
+  )
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -230,7 +210,7 @@ function App() {
       })
     }
 
-    playAlertSound()
+    void alertSoundServiceRef.current.play(appSettings.alertSoundId, appSettings.alertVolume)
   }
 
   // Use refs to track alert state without causing effect re-runs
@@ -382,6 +362,10 @@ function App() {
             onHidePreviewChange={(hide) => updateAppSettings({ hidePreview: hide })}
             closeAction={appSettings.closeAction}
             onCloseActionChange={(action) => updateAppSettings({ closeAction: action })}
+            alertSoundId={appSettings.alertSoundId}
+            alertVolume={appSettings.alertVolume}
+            onAlertSoundChange={(changes) => updateAppSettings(changes)}
+            onPreviewSound={(id) => void alertSoundServiceRef.current.preview(id, appSettings.alertVolume)}
           />
           <div className="window-controls">
             <button
