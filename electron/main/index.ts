@@ -4,13 +4,10 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { update } from './update'
-import { initialize as initAptabase, trackEvent } from '@aptabase/electron/main'
+import { initAnalytics, trackAnalytics } from './analytics'
 import { registerCustomSoundScheme, registerCustomSoundIO } from './customSoundIO'
 
-// Initialize Aptabase analytics (self-hosted)
-initAptabase('A-SH-5688838680', {
-  host: 'https://***REMOVED***'
-})
+initAnalytics()
 
 registerCustomSoundScheme()
 
@@ -411,12 +408,12 @@ ipcMain.handle('window-quit', () => {
 })
 
 // Analytics IPC handler - track events from renderer (with whitelist)
-ipcMain.handle('track-event', (_, eventName: string, props?: Record<string, string | number>) => {
+ipcMain.handle('track-event', async (_, eventName: string, props?: Record<string, string | number>) => {
   if (!VALID_ANALYTICS_EVENTS.has(eventName)) {
     console.warn(`[Analytics] Blocked unknown event: ${eventName}`)
     return false
   }
-  trackEvent(eventName, props)
+  await trackAnalytics(eventName, props)
   return true
 })
 
@@ -424,7 +421,7 @@ app.whenReady().then(() => {
   registerCustomSoundIO()
   createWindow()
   createTray()
-  trackEvent('app_started')
+  trackAnalytics('app_started')
 })
 
 app.on('window-all-closed', () => {
@@ -434,7 +431,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true
-  trackEvent('app_closed')
+  trackAnalytics('app_closed')
 })
 
 app.on('second-instance', () => {

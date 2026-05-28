@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron'
-import { trackEvent } from '@aptabase/electron/main'
+import { trackAnalytics } from './analytics'
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
 
 interface UpdateDownloadedEvent {
@@ -21,7 +21,7 @@ export function update(win: Electron.BrowserWindow) {
   autoUpdater.on('update-available', (info: UpdateInfo) => {
     console.log('Update available:', info.version)
     win.webContents.send('update-can-available', { update: true, version: app.getVersion(), newVersion: info?.version })
-    trackEvent('update_available', {
+    trackAnalytics('update_available', {
       current_version: app.getVersion(),
       new_version: info?.version || 'unknown'
     })
@@ -80,14 +80,14 @@ export function update(win: Electron.BrowserWindow) {
       () => {
         // feedback update downloaded message
         event.sender.send('update-downloaded')
-        trackEvent('update_downloaded')
+        trackAnalytics('update_downloaded')
       }
     )
   })
 
   // Install now
   ipcMain.handle('quit-and-install', () => {
-    trackEvent('update_installed')
+    trackAnalytics('update_installed')
     autoUpdater.quitAndInstall(false, true)
   })
 }
