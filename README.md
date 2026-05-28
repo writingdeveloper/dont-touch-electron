@@ -79,3 +79,16 @@ Issues and pull requests are welcome.
 ## License
 
 [MIT](LICENSE)
+
+## Troubleshooting: Analytics
+
+This project uses a self-hosted Aptabase instance at `https://aptabase.devmanage.duckdns.org`. If you're running your own deployment and events aren't appearing in the dashboard:
+
+1. **Confirm the app key is registered.** In your Aptabase dashboard, ensure an app exists with key `A-SH-XXXXXXXXXX` matching the one in `electron/main/analytics.ts`.
+2. **Toggle "Show Debug events".** During development (`npm run dev`), the SDK marks events with `isDebug=true`. Most dashboards hide these by default — toggle the filter on.
+3. **Check the console.** Open DevTools (in dev mode it's on automatically) or run the packaged app from a terminal. The main process prints `[Aptabase] init {...}` on startup, `[Aptabase] sent <event>` for each successful send (dev only), and `[Aptabase] failed <event>: <error>` on failures.
+4. **Verify HTTPS.** The host must serve a valid certificate Electron's `net` module will accept. Self-signed certs are rejected silently — terminate TLS at a trusted reverse proxy if needed.
+
+## Sound assets
+
+Built-in alert tones are generated with `npm run generate:tones`. To regenerate or tweak them, see `scripts/generate-tones.mjs`. Voice clips ship in `public/sounds/voice-*.mp3`; replacing them is documented in `public/sounds/README.md`.
