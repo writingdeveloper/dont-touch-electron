@@ -20,7 +20,8 @@
     "preview": "vite preview",
     "pretest": "vite build --mode=test",
     "test": "vitest run",
-    "generate:tones": "node scripts/generate-tones.mjs"
+    "generate:tones": "node scripts/generate-tones.mjs",
+    "generate:voices": "python scripts/generate-voices.py"
   },
   "dependencies": {
     "@aptabase/electron": "^0.3.1",
