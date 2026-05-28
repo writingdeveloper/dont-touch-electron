@@ -34,5 +34,8 @@ yarn.lock
 # Claude Code
 .claude/
 
+# Internal planning/spec artifacts (superpowers workflow output) — not for the public repo
+docs/superpowers/
+
 # Windows artifact
 nul
