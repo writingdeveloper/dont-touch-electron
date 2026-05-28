@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { Language, languageNames } from '../i18n/translations'
 import { HabitSettings, ExportData } from '../types/statistics'
@@ -8,6 +8,8 @@ import { STORAGE_KEYS } from '../constants/storage-keys'
 import { IPC_CHANNELS } from '../constants/ipc-channels'
 import { safeInvoke } from '../utils/ipc'
 import { clampFloat, clampInt } from '../utils/validation'
+import { TONE_PRESETS, VOICE_PRESETS } from '../audio/soundPresets'
+import { listCustomSounds, addCustomSound, deleteCustomSound, type CustomSoundEntry } from '../audio/customSoundStorage'
 
 interface DetectionConfig {
   triggerTime: number
@@ -36,6 +38,10 @@ interface SettingsPanelProps {
   onHidePreviewChange?: (hide: boolean) => void
   closeAction?: 'ask' | 'quit' | 'tray'
   onCloseActionChange?: (action: 'ask' | 'quit' | 'tray') => void
+  alertSoundId: string
+  alertVolume: number
+  onAlertSoundChange: (changes: { alertSoundId?: string; alertVolume?: number }) => void
+  onPreviewSound: (id: string) => void
 }
 
 export function SettingsPanel({
@@ -52,11 +58,52 @@ export function SettingsPanel({
   onHidePreviewChange,
   closeAction = 'ask',
   onCloseActionChange,
+  alertSoundId,
+  alertVolume,
+  onAlertSoundChange,
+  onPreviewSound,
 }: SettingsPanelProps) {
   const { t, language, setLanguage } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'detection' | 'habit' | 'data' | 'app'>('detection')
+  const [activeTab, setActiveTab] = useState<'detection' | 'habit' | 'sound' | 'data' | 'app'>('detection')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [customSounds, setCustomSounds] = useState<CustomSoundEntry[]>([])
+  const [allLanguages, setAllLanguages] = useState(false)
+  const soundFileInputRef = useRef<HTMLInputElement>(null)
+
+  const refreshCustomSounds = useCallback(async () => {
+    setCustomSounds(await listCustomSounds())
+  }, [])
+
+  useEffect(() => {
+    void refreshCustomSounds()
+  }, [refreshCustomSounds])
+
+  const visibleVoices = useMemo(() => {
+    return allLanguages ? VOICE_PRESETS : VOICE_PRESETS.filter(v => v.language === language)
+  }, [allLanguages, language])
+
+  const handleSoundUploadClick = () => soundFileInputRef.current?.click()
+
+  const handleSoundUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const entry = await addCustomSound(file)
+    if (entry) {
+      await refreshCustomSounds()
+      onAlertSoundChange({ alertSoundId: entry.id })
+    } else {
+      alert(t.settingsImportError)
+    }
+  }
+
+  const handleSoundDelete = async (id: string) => {
+    await deleteCustomSound(id)
+    await refreshCustomSounds()
+    if (alertSoundId === id) onAlertSoundChange({ alertSoundId: 'tone-chime' })
+  }
 
   // Debounced slider state — local values update instantly, callbacks fire after 150ms
   const [localSensitivity, setLocalSensitivity] = useState(config.sensitivity)
@@ -206,6 +253,12 @@ export function SettingsPanel({
               onClick={() => setActiveTab('habit')}
             >
               {t.settingsTabHabit || 'Habit'}
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'sound' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sound')}
+            >
+              {t.settingsTabSound}
             </button>
             <button
               className={`tab-btn ${activeTab === 'app' ? 'active' : ''}`}
@@ -435,6 +488,132 @@ export function SettingsPanel({
                     />
                     <span className="toggle-switch" />
                   </label>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'sound' && (
+              <>
+                <div className="settings-section">
+                  <h4>{t.settingsAlertSound}</h4>
+                  <p className="section-desc">{t.settingsAlertSoundDesc}</p>
+
+                  <div className="zone-category">
+                    <h5>{t.settingsSoundCategoryTones}</h5>
+                    <div className="sound-list">
+                      {TONE_PRESETS.map(preset => (
+                        <label key={preset.id} className={`sound-row ${alertSoundId === preset.id ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="alert-sound"
+                            checked={alertSoundId === preset.id}
+                            onChange={() => onAlertSoundChange({ alertSoundId: preset.id })}
+                          />
+                          <span className="sound-label">{t[preset.labelKey as keyof typeof t] as string}</span>
+                          <button
+                            type="button"
+                            className="sound-preview-btn"
+                            onClick={(e) => { e.preventDefault(); onPreviewSound(preset.id) }}
+                          >
+                            ▶ {t.settingsSoundPreview}
+                          </button>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="zone-category">
+                    <div className="sound-voice-header">
+                      <h5>{t.settingsSoundCategoryVoices}</h5>
+                      <label className="all-languages-toggle">
+                        <input
+                          type="checkbox"
+                          checked={allLanguages}
+                          onChange={(e) => setAllLanguages(e.target.checked)}
+                        />
+                        <span>{t.settingsSoundAllLanguages}</span>
+                      </label>
+                    </div>
+                    <div className="sound-list">
+                      {visibleVoices.map(preset => (
+                        <label key={preset.id} className={`sound-row ${alertSoundId === preset.id ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="alert-sound"
+                            checked={alertSoundId === preset.id}
+                            onChange={() => onAlertSoundChange({ alertSoundId: preset.id })}
+                          />
+                          <span className="sound-label">{t[preset.labelKey as keyof typeof t] as string}</span>
+                          <button
+                            type="button"
+                            className="sound-preview-btn"
+                            onClick={(e) => { e.preventDefault(); onPreviewSound(preset.id) }}
+                          >
+                            ▶ {t.settingsSoundPreview}
+                          </button>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="zone-category">
+                    <h5>{t.settingsSoundCategoryCustom}</h5>
+                    <div className="sound-list">
+                      {customSounds.map(entry => (
+                        <label key={entry.id} className={`sound-row ${alertSoundId === entry.id ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="alert-sound"
+                            checked={alertSoundId === entry.id}
+                            onChange={() => onAlertSoundChange({ alertSoundId: entry.id })}
+                          />
+                          <span className="sound-label">{entry.originalName}</span>
+                          <button
+                            type="button"
+                            className="sound-preview-btn"
+                            onClick={(e) => { e.preventDefault(); onPreviewSound(entry.id) }}
+                          >
+                            ▶ {t.settingsSoundPreview}
+                          </button>
+                          <button
+                            type="button"
+                            className="sound-delete-btn"
+                            onClick={(e) => { e.preventDefault(); void handleSoundDelete(entry.id) }}
+                            title={t.settingsSoundDelete}
+                          >
+                            ✕
+                          </button>
+                        </label>
+                      ))}
+                    </div>
+                    <button type="button" className="sound-upload-btn" onClick={handleSoundUploadClick}>
+                      + {t.settingsSoundUpload}
+                    </button>
+                    <p className="slider-hint">{t.settingsSoundUploadHint}</p>
+                    <input
+                      ref={soundFileInputRef}
+                      type="file"
+                      accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
+                      onChange={handleSoundUploadFile}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <h4>{t.settingsSoundVolume}</h4>
+                  <div className="slider-container">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={alertVolume}
+                      onChange={(e) => onAlertSoundChange({ alertVolume: clampFloat(e.target.value, 0, 1, alertVolume) })}
+                      className="slider"
+                    />
+                    <span className="slider-value">{Math.round(alertVolume * 100)}%</span>
+                  </div>
                 </div>
               </>
             )}
@@ -988,6 +1167,113 @@ export function SettingsPanel({
           background: rgba(0, 255, 255, 0.1);
           border-color: rgba(0, 255, 255, 0.4);
           color: #00ffff;
+        }
+
+        .sound-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .sound-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .sound-row:hover {
+          background: rgba(0, 255, 255, 0.06);
+          border-color: rgba(0, 255, 255, 0.25);
+        }
+
+        .sound-row.selected {
+          background: rgba(0, 255, 136, 0.12);
+          border-color: rgba(0, 255, 136, 0.5);
+        }
+
+        .sound-row input[type="radio"] {
+          margin: 0;
+          accent-color: #00ff88;
+        }
+
+        .sound-label {
+          flex: 1;
+          font-size: 12px;
+          color: #ccc;
+        }
+
+        .sound-row.selected .sound-label {
+          color: #00ff88;
+        }
+
+        .sound-preview-btn {
+          background: rgba(0, 255, 255, 0.1);
+          border: 1px solid rgba(0, 255, 255, 0.3);
+          color: #00ffff;
+          padding: 4px 10px;
+          border-radius: 4px;
+          font-size: 11px;
+          cursor: pointer;
+        }
+
+        .sound-preview-btn:hover {
+          background: rgba(0, 255, 255, 0.2);
+        }
+
+        .sound-delete-btn {
+          background: none;
+          border: none;
+          color: #ff4444;
+          font-size: 14px;
+          cursor: pointer;
+          padding: 0 6px;
+        }
+
+        .sound-delete-btn:hover {
+          color: #ff7777;
+        }
+
+        .sound-upload-btn {
+          margin-top: 8px;
+          width: 100%;
+          padding: 10px;
+          background: rgba(0, 136, 255, 0.1);
+          border: 1px dashed rgba(0, 136, 255, 0.4);
+          color: #66bbff;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+
+        .sound-upload-btn:hover {
+          background: rgba(0, 136, 255, 0.2);
+          border-color: rgba(0, 136, 255, 0.7);
+        }
+
+        .sound-voice-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+        }
+
+        .all-languages-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          color: #888;
+          cursor: pointer;
+        }
+
+        .all-languages-toggle input {
+          accent-color: #00ff88;
         }
       `}</style>
     </div>
