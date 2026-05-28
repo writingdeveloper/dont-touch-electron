@@ -27,6 +27,10 @@ const ALLOWED_INVOKE_CHANNELS = new Set([
   'track-event',
   'open-external',
   'open-win',
+  'custom-sound:list',
+  'custom-sound:add',
+  'custom-sound:delete',
+  'custom-sound:resolve-url',
 ])
 
 // Main → Renderer (receive)
