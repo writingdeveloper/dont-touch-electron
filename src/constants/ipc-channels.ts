@@ -50,4 +50,10 @@ export const IPC_CHANNELS = {
 
   // Misc
   MAIN_PROCESS_MESSAGE: 'main-process-message',
+
+  // Custom sounds
+  CUSTOM_SOUND_LIST: 'custom-sound:list',
+  CUSTOM_SOUND_ADD: 'custom-sound:add',
+  CUSTOM_SOUND_DELETE: 'custom-sound:delete',
+  CUSTOM_SOUND_RESOLVE_URL: 'custom-sound:resolve-url',
 } as const
