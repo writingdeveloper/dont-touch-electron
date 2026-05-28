@@ -19,7 +19,8 @@
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
     "pretest": "vite build --mode=test",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate:tones": "node scripts/generate-tones.mjs"
   },
   "dependencies": {
     "@aptabase/electron": "^0.3.1",
