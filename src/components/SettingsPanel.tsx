@@ -706,6 +706,23 @@ export function SettingsPanel({
                   </label>
                 </div>
 
+                {/* Anonymous Usage Analytics (opt-out) */}
+                <div className="settings-section">
+                  <label className="toggle-label">
+                    <div>
+                      <span>{t.settingsAnalytics || 'Send anonymous usage data'}</span>
+                      <p className="toggle-hint">{t.settingsAnalyticsHint || 'Helps improve the app — never includes images or personal data'}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={appSettings.analyticsEnabled}
+                      onChange={(e) => updateAppSettings({ analyticsEnabled: e.target.checked })}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-switch" />
+                  </label>
+                </div>
+
                 {/* Close Action Reset */}
                 {closeAction !== 'ask' && (
                   <div className="settings-section">

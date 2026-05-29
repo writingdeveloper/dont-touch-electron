@@ -6,6 +6,7 @@ export interface AppSettings {
   closeAction: 'ask' | 'quit' | 'tray'
   alertSoundId: string
   alertVolume: number
+  analyticsEnabled: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -16,4 +17,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeAction: 'ask',
   alertSoundId: 'tone-chime',
   alertVolume: 0.5,
+  analyticsEnabled: true,
 }

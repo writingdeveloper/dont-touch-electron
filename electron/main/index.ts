@@ -4,7 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { update } from './update'
-import { initAnalytics, trackAnalytics } from './analytics'
+import { initAnalytics, trackAnalytics, setAnalyticsEnabled } from './analytics'
 import { registerCustomSoundScheme, registerCustomSoundIO } from './customSoundIO'
 
 initAnalytics()
@@ -16,12 +16,14 @@ interface AppSettings {
   autoStart: boolean
   minimizeToTray: boolean
   startMinimized: boolean
+  analyticsEnabled: boolean
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   autoStart: false,
   minimizeToTray: true,
   startMinimized: false,
+  analyticsEnabled: true,
 }
 
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
@@ -39,6 +41,7 @@ function loadAppSettings(): AppSettings {
           autoStart: Boolean(parsed.autoStart ?? DEFAULT_APP_SETTINGS.autoStart),
           minimizeToTray: Boolean(parsed.minimizeToTray ?? DEFAULT_APP_SETTINGS.minimizeToTray),
           startMinimized: Boolean(parsed.startMinimized ?? DEFAULT_APP_SETTINGS.startMinimized),
+          analyticsEnabled: Boolean(parsed.analyticsEnabled ?? DEFAULT_APP_SETTINGS.analyticsEnabled),
         }
       }
     }
@@ -57,6 +60,7 @@ function saveAppSettings(settings: AppSettings): void {
 }
 
 let appSettings = loadAppSettings()
+setAnalyticsEnabled(appSettings.analyticsEnabled)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -378,6 +382,8 @@ ipcMain.handle('set-app-settings', (_, settings: AppSettings) => {
     openAtLogin: settings.autoStart,
     openAsHidden: settings.startMinimized,
   })
+
+  setAnalyticsEnabled(settings.analyticsEnabled ?? true)
 
   return true
 })

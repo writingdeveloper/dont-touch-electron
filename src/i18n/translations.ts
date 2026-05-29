@@ -159,6 +159,8 @@ export interface Translations {
   settingsMinimizeToTrayHint: string;
   settingsStartMinimized: string;
   settingsStartMinimizedHint: string;
+  settingsAnalytics: string;
+  settingsAnalyticsHint: string;
 
   // Button titles
   buttonAbout: string;
@@ -395,6 +397,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: 'Keep running in system tray when closed',
     settingsStartMinimized: 'Start minimized',
     settingsStartMinimizedHint: 'Start in system tray',
+    settingsAnalytics: 'Send anonymous usage data',
+    settingsAnalyticsHint: 'Helps improve the app — never includes images or personal data',
 
     // Button titles
     buttonAbout: 'About',
@@ -629,6 +633,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: '닫아도 시스템 트레이에서 계속 실행',
     settingsStartMinimized: '최소화 상태로 시작',
     settingsStartMinimizedHint: '시스템 트레이에서 시작',
+    settingsAnalytics: '익명 사용 통계 전송',
+    settingsAnalyticsHint: '앱 개선에 사용 — 이미지나 개인정보는 절대 포함되지 않음',
 
     // Button titles
     buttonAbout: '정보',
@@ -863,6 +869,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: '閉じてもシステムトレイで実行を続ける',
     settingsStartMinimized: '最小化状態で起動',
     settingsStartMinimizedHint: 'システムトレイで起動',
+    settingsAnalytics: '匿名の使用統計を送信',
+    settingsAnalyticsHint: 'アプリ改善のため — 画像や個人情報は一切含みません',
 
     // Button titles
     buttonAbout: '情報',
@@ -1097,6 +1105,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: '关闭时继续在系统托盘中运行',
     settingsStartMinimized: '启动时最小化',
     settingsStartMinimizedHint: '在系统托盘中启动',
+    settingsAnalytics: '发送匿名使用统计',
+    settingsAnalyticsHint: '用于改进应用 — 绝不包含图像或个人数据',
 
     // Button titles
     buttonAbout: '关于',
@@ -1331,6 +1341,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: 'Seguir ejecutando en la bandeja del sistema',
     settingsStartMinimized: 'Iniciar minimizado',
     settingsStartMinimizedHint: 'Iniciar en la bandeja del sistema',
+    settingsAnalytics: 'Enviar datos de uso anónimos',
+    settingsAnalyticsHint: 'Ayuda a mejorar la app — nunca incluye imágenes ni datos personales',
 
     // Button titles
     buttonAbout: 'Acerca de',
@@ -1565,6 +1577,8 @@ export const translations: Record<Language, Translations> = {
     settingsMinimizeToTrayHint: 'Продолжать работу в системном трее',
     settingsStartMinimized: 'Запускать свёрнутым',
     settingsStartMinimizedHint: 'Запускать в системном трее',
+    settingsAnalytics: 'Отправлять анонимную статистику',
+    settingsAnalyticsHint: 'Помогает улучшать приложение — без изображений и личных данных',
 
     // Button titles
     buttonAbout: 'О приложении',
