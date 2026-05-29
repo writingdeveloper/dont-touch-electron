@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-05-29
+
+### Added
+- **Analytics opt-out** — a "Send anonymous usage data" toggle under Settings → App.
+  Anonymous usage analytics stay on by default but can now be turned off; the
+  toggle gates all analytics (both main-process and renderer events) and is
+  localized in all six languages.
+
+### Changed
+- Upgraded the test toolchain (`vitest` 2 → 4), resolving the remaining moderate
+  dev-dependency advisories (`esbuild` via `vite`); `npm audit` now reports zero
+  vulnerabilities. No change to the shipped application.
+
 ## [1.3.2] - 2026-05-28
 
 ### Fixed
@@ -55,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audio — with volume control.
 - Aptabase diagnostic logging for analytics troubleshooting.
 
+[1.3.3]: https://github.com/writingdeveloper/dont-touch-electron/releases/tag/v1.3.3
 [1.3.2]: https://github.com/writingdeveloper/dont-touch-electron/releases/tag/v1.3.2
 [1.3.1]: https://github.com/writingdeveloper/dont-touch-electron/releases/tag/v1.3.1
 [1.3.0]: https://github.com/writingdeveloper/dont-touch-electron/releases/tag/v1.3.0
