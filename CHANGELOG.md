@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- **All analytics and telemetry.** Removed the Aptabase integration, the
+  `track-event` IPC bridge, every renderer/main tracking call, and the
+  "Send anonymous usage data" setting. The app now collects nothing and sends
+  nothing off-device (aside from optional GitHub-hosted update checks). This
+  also removes the hardcoded analytics endpoint from the codebase.
+
 ## [1.3.3] - 2026-05-29
 
 ### Added

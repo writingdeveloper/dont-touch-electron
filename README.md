@@ -15,7 +15,7 @@
 
 A desktop app that uses your webcam to detect when your hand approaches your face. It helps break repetitive behaviors like **trichotillomania** (hair-pulling) and **dermatillomania** (skin-picking) by providing immediate visual and audio alerts.
 
-All video processing happens locally — your camera images never leave your device. Only anonymous usage analytics (no personal data, no images) are collected to help improve the app.
+All video processing happens locally — your camera images never leave your device. The app collects **no analytics or telemetry of any kind**; nothing is sent off-device.
 
 ## Features
 
@@ -69,8 +69,8 @@ npm run build    # Production build
 ## Privacy
 
 - All video and image processing runs locally — camera frames never leave your device
-- Only anonymous usage analytics (e.g. app opened, detection started/stopped) are collected to help improve the app — no personal data, no images, no video
-- Analytics are handled in line with GDPR, CCPA, and PIPEDA
+- **No analytics, no telemetry, no tracking** — the app sends nothing off-device
+- Works fully offline (except optional GitHub-hosted update checks)
 
 ## Contributing
 

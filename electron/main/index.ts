@@ -4,10 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
 import { update } from './update'
-import { initAnalytics, trackAnalytics, setAnalyticsEnabled } from './analytics'
 import { registerCustomSoundScheme, registerCustomSoundIO } from './customSoundIO'
-
-initAnalytics()
 
 registerCustomSoundScheme()
 
@@ -16,14 +13,12 @@ interface AppSettings {
   autoStart: boolean
   minimizeToTray: boolean
   startMinimized: boolean
-  analyticsEnabled: boolean
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   autoStart: false,
   minimizeToTray: true,
   startMinimized: false,
-  analyticsEnabled: true,
 }
 
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
@@ -41,7 +36,6 @@ function loadAppSettings(): AppSettings {
           autoStart: Boolean(parsed.autoStart ?? DEFAULT_APP_SETTINGS.autoStart),
           minimizeToTray: Boolean(parsed.minimizeToTray ?? DEFAULT_APP_SETTINGS.minimizeToTray),
           startMinimized: Boolean(parsed.startMinimized ?? DEFAULT_APP_SETTINGS.startMinimized),
-          analyticsEnabled: Boolean(parsed.analyticsEnabled ?? DEFAULT_APP_SETTINGS.analyticsEnabled),
         }
       }
     }
@@ -60,7 +54,6 @@ function saveAppSettings(settings: AppSettings): void {
 }
 
 let appSettings = loadAppSettings()
-setAnalyticsEnabled(appSettings.analyticsEnabled)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -109,19 +102,6 @@ function isValidExternalUrl(url: string): boolean {
     return false
   }
 }
-
-// Analytics event whitelist
-const VALID_ANALYTICS_EVENTS = new Set([
-  'app_started',
-  'app_closed',
-  'detection_started',
-  'detection_stopped',
-  'face_touch_detected',
-  'meditation_started',
-  'meditation_completed',
-  'settings_changed',
-  'error_boundary_caught',
-])
 
 const preload = path.join(__dirname, '../preload/index.js')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
@@ -383,8 +363,6 @@ ipcMain.handle('set-app-settings', (_, settings: AppSettings) => {
     openAsHidden: settings.startMinimized,
   })
 
-  setAnalyticsEnabled(settings.analyticsEnabled ?? true)
-
   return true
 })
 
@@ -426,21 +404,10 @@ ipcMain.handle('window-quit', () => {
   return true
 })
 
-// Analytics IPC handler - track events from renderer (with whitelist)
-ipcMain.handle('track-event', async (_, eventName: string, props?: Record<string, string | number>) => {
-  if (!VALID_ANALYTICS_EVENTS.has(eventName)) {
-    console.warn(`[Analytics] Blocked unknown event: ${eventName}`)
-    return false
-  }
-  await trackAnalytics(eventName, props)
-  return true
-})
-
 app.whenReady().then(() => {
   registerCustomSoundIO()
   createWindow()
   createTray()
-  trackAnalytics('app_started')
 })
 
 app.on('window-all-closed', () => {
@@ -450,7 +417,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true
-  trackAnalytics('app_closed')
 })
 
 app.on('second-instance', () => {

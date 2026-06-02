@@ -34,11 +34,6 @@ vi.mock('electron', () => {
   }
 })
 
-vi.mock('../../electron/main/analytics', () => ({
-  initAnalytics: vi.fn(),
-  trackAnalytics: vi.fn().mockResolvedValue(undefined),
-}))
-
 const makeWin = () => ({ webContents: { send: vi.fn() } }) as any
 
 beforeEach(async () => {

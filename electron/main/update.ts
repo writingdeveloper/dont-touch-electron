@@ -1,5 +1,4 @@
 import { app, ipcMain } from 'electron'
-import { trackAnalytics } from './analytics'
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
 
 // The main window that auto-updater events should be forwarded to.
@@ -38,10 +37,6 @@ export function update(win: Electron.BrowserWindow) {
     console.log('Update available:', info.version)
     lastUpdateStatus = { update: true, version: app.getVersion(), newVersion: info?.version }
     currentWin?.webContents.send('update-can-available', lastUpdateStatus)
-    trackAnalytics('update_available', {
-      current_version: app.getVersion(),
-      new_version: info?.version || 'unknown'
-    })
   })
 
   // update not available
@@ -59,7 +54,6 @@ export function update(win: Electron.BrowserWindow) {
   // download complete
   autoUpdater.on('update-downloaded', () => {
     currentWin?.webContents.send('update-downloaded')
-    trackAnalytics('update_downloaded')
   })
 
   // error
@@ -109,7 +103,6 @@ export function update(win: Electron.BrowserWindow) {
 
   // Install now
   ipcMain.handle('quit-and-install', () => {
-    trackAnalytics('update_installed')
     autoUpdater.quitAndInstall(false, true)
   })
 }

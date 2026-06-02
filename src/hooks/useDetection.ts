@@ -81,7 +81,6 @@ export function useDetection({
 
         analyzerRef.current.setAlertCallback(() => {
           onAlertRef.current()
-          window.analytics?.trackEvent('face_touch_detected')
         })
 
         analyzerRef.current.setStateCallback((state) => {
@@ -180,7 +179,6 @@ export function useDetection({
   const startDetection = useCallback(() => {
     isRunningRef.current = true
     runDetection()
-    window.analytics?.trackEvent('detection_started')
   }, [runDetection])
 
   const stopDetection = useCallback(() => {
@@ -196,7 +194,6 @@ export function useDetection({
     setFaceLandmarksCount(null)
     setHandsCount(0)
     analyzerRef.current?.reset()
-    window.analytics?.trackEvent('detection_stopped')
 
     // Clear canvas
     const canvas = canvasRef.current

@@ -22,10 +22,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo)
-    window.analytics?.trackEvent('error_boundary_caught', {
-      error: error.message,
-      componentStack: (errorInfo.componentStack || '').slice(0, 200),
-    })
   }
 
   render() {

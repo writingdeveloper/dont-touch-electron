@@ -86,13 +86,6 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 })
 
-// Expose analytics API
-contextBridge.exposeInMainWorld('analytics', {
-  trackEvent(eventName: string, props?: Record<string, string | number>) {
-    return ipcRenderer.invoke('track-event', eventName, props)
-  },
-})
-
 // Expose app info API
 contextBridge.exposeInMainWorld('appInfo', {
   getVersion(): Promise<string> {
