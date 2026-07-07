@@ -92,6 +92,7 @@ let win: BrowserWindow | null = null
 let alertWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let alertShowRequestId = 0
 
 // URL validation for external links
 function isValidExternalUrl(url: string): boolean {
@@ -288,11 +289,17 @@ async function createWindow() {
 
 // IPC Handlers for fullscreen alert
 ipcMain.handle('show-fullscreen-alert', (_, data) => {
+  const showRequestId = ++alertShowRequestId
+
   if (!alertWindow) {
     createAlertWindow()
   }
 
   const sendDataAndShow = () => {
+    if (showRequestId !== alertShowRequestId || !alertWindow) {
+      return
+    }
+
     // Ensure window covers entire screen including taskbar
     const primaryDisplay = screen.getPrimaryDisplay()
     const { bounds } = primaryDisplay
@@ -314,6 +321,8 @@ ipcMain.handle('show-fullscreen-alert', (_, data) => {
 })
 
 ipcMain.handle('hide-fullscreen-alert', () => {
+  alertShowRequestId++
+
   if (alertWindow) {
     alertWindow.hide()
   }
