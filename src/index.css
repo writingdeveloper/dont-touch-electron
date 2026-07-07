@@ -7,6 +7,8 @@
   line-height: 1.5;
   font-weight: 400;
 
+  --z-video-overlay: 2;
+  --z-video-hud: 3;
   --z-floating: 20;
   --z-modal-backdrop: 40;
   --z-modal: 50;

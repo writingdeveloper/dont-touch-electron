@@ -39,7 +39,7 @@ export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning, ca
           position: absolute;
           bottom: 20px;
           right: 20px;
-          z-index: 20;
+          z-index: var(--z-video-hud);
           pointer-events: none;
         }
 

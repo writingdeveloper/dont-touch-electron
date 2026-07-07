@@ -161,7 +161,7 @@ export function VideoPreview({
           left: 70px;
           font-size: 12px;
           color: rgba(255, 255, 255, 0.58);
-          z-index: 15;
+          z-index: var(--z-video-hud);
           letter-spacing: 0;
         }
 
@@ -240,7 +240,7 @@ export function VideoPreview({
           align-items: center;
           justify-content: center;
           background: rgba(17, 24, 39, 0.96);
-          z-index: 10;
+          z-index: var(--z-video-overlay);
         }
 
         .hidden-icon {
