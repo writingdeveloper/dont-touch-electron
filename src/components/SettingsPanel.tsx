@@ -13,6 +13,13 @@ import { STORAGE_KEYS } from '../constants/storage-keys'
 import { IPC_CHANNELS } from '../constants/ipc-channels'
 import { safeInvoke } from '../utils/ipc'
 import { clampFloat, clampInt } from '../utils/validation'
+import {
+  CAMERA_QUALITY_PROFILES,
+  CameraQuality,
+  CameraStreamInfo,
+  coerceCameraQuality,
+  formatCameraStreamInfo,
+} from '../utils/cameraQuality'
 import { TONE_PRESETS, VOICE_PRESETS } from '../audio/soundPresets'
 import { listCustomSounds, addCustomSound, deleteCustomSound, type CustomSoundEntry } from '../audio/customSoundStorage'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -48,8 +55,11 @@ interface SettingsPanelProps {
   onExportData?: () => ExportData
   onImportData?: (data: ExportData) => boolean
   cameraDevices?: VideoDevice[]
+  cameraStreamInfo?: CameraStreamInfo | null
   selectedCameraId?: string | null
   onCameraChange?: (deviceId: string | null) => void
+  cameraQuality: CameraQuality
+  onCameraQualityChange: (quality: CameraQuality) => void
   hidePreview?: boolean
   onHidePreviewChange?: (hide: boolean) => void
   closeAction?: 'ask' | 'quit' | 'tray'
@@ -70,8 +80,11 @@ export function SettingsPanel({
   onExportData,
   onImportData,
   cameraDevices = [],
+  cameraStreamInfo = null,
   selectedCameraId,
   onCameraChange,
+  cameraQuality,
+  onCameraQualityChange,
   hidePreview = false,
   onHidePreviewChange,
   closeAction = 'ask',
@@ -220,7 +233,11 @@ export function SettingsPanel({
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS)
       if (stored) {
-        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
+        const parsed = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
+        return {
+          ...parsed,
+          cameraQuality: coerceCameraQuality(parsed.cameraQuality),
+        }
       }
     } catch {
       // Ignore
@@ -233,7 +250,10 @@ export function SettingsPanel({
     // Get initial settings from Electron
     window.ipcRenderer?.invoke(IPC_CHANNELS.GET_APP_SETTINGS).then((settings: AppSettings | null) => {
       if (settings) {
-        setAppSettings(settings)
+        setAppSettings({
+          ...settings,
+          cameraQuality: coerceCameraQuality(settings.cameraQuality),
+        })
       }
     }).catch(() => {
       // Not in Electron environment
@@ -241,7 +261,11 @@ export function SettingsPanel({
   }, [])
 
   const updateAppSettings = (newSettings: Partial<AppSettings>) => {
-    const updated = { ...appSettings, ...newSettings }
+    const merged = { ...appSettings, ...newSettings }
+    const updated = {
+      ...merged,
+      cameraQuality: coerceCameraQuality(merged.cameraQuality),
+    }
     setAppSettings(updated)
     try {
       localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(updated))
@@ -449,6 +473,32 @@ export function SettingsPanel({
                       </option>
                     ))}
                   </select>
+                  <div className="camera-actual">
+                    <span>Actual stream</span>
+                    <strong>{formatCameraStreamInfo(cameraStreamInfo)}</strong>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <h4>Camera quality</h4>
+                  <p className="slider-hint">Higher quality can improve landmark accuracy. It applies the next time monitoring starts.</p>
+                  <div className="camera-quality-grid" role="group" aria-label="Camera quality">
+                    {(Object.keys(CAMERA_QUALITY_PROFILES) as CameraQuality[]).map((quality) => {
+                      const profile = CAMERA_QUALITY_PROFILES[quality]
+                      return (
+                        <button
+                          key={quality}
+                          type="button"
+                          className={`camera-quality-btn ${cameraQuality === quality ? 'selected' : ''}`}
+                          aria-pressed={cameraQuality === quality}
+                          onClick={() => onCameraQualityChange(quality)}
+                        >
+                          <span>{profile.label}</span>
+                          <small>{profile.width}x{profile.height} · {profile.description}</small>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div className="settings-section">
@@ -1569,6 +1619,76 @@ export function SettingsPanel({
           background: #1a1a2e;
           color: #fff;
           padding: 8px;
+        }
+
+        .camera-actual {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 10px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          background: rgba(125, 211, 252, 0.08);
+          border: 1px solid rgba(125, 211, 252, 0.16);
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .camera-actual strong {
+          color: #dbeafe;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .camera-quality-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 10px;
+        }
+
+        .camera-quality-btn {
+          display: flex;
+          min-height: 86px;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 11px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.22);
+          background: rgba(15, 23, 42, 0.52);
+          color: #e2e8f0;
+          text-align: left;
+          cursor: pointer;
+          transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
+        }
+
+        .camera-quality-btn:hover {
+          transform: translateY(-1px);
+          border-color: rgba(125, 211, 252, 0.38);
+          background: rgba(125, 211, 252, 0.08);
+        }
+
+        .camera-quality-btn:focus-visible {
+          outline: 2px solid #7dd3fc;
+          outline-offset: 2px;
+        }
+
+        .camera-quality-btn.selected {
+          border-color: rgba(125, 211, 252, 0.65);
+          background: rgba(125, 211, 252, 0.14);
+        }
+
+        .camera-quality-btn span {
+          font-size: 13px;
+          font-weight: 650;
+        }
+
+        .camera-quality-btn small {
+          color: #94a3b8;
+          font-size: 10px;
+          line-height: 1.35;
         }
 
         .toggle-label {

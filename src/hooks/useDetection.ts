@@ -63,6 +63,7 @@ export function useDetection({
   const isRunningRef = useRef(false)
   const onAlertRef = useRef(onAlert)
   const isInitializedRef = useRef(false)
+  const lastVideoTimeRef = useRef(-1)
 
   // Keep onAlert ref updated
   useEffect(() => {
@@ -162,6 +163,12 @@ export function useDetection({
       return
     }
 
+    if (video.currentTime === lastVideoTimeRef.current) {
+      detectionTimerRef.current = setTimeout(runDetection, 16)
+      return
+    }
+    lastVideoTimeRef.current = video.currentTime
+
     try {
       const results = await detector.detect(video)
 
@@ -175,8 +182,8 @@ export function useDetection({
       // Draw results on canvas
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         detector.drawResults(ctx, results, proximityInfo.isNearHead)
       }
@@ -207,6 +214,7 @@ export function useDetection({
     setActiveZone(null)
     setFaceLandmarksCount(null)
     setHandsCount(0)
+    lastVideoTimeRef.current = -1
     analyzerRef.current?.reset()
 
     // Clear canvas

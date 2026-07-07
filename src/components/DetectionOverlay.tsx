@@ -1,10 +1,13 @@
+import { CameraStreamInfo, formatCameraStreamInfo } from '../utils/cameraQuality'
+
 interface DetectionOverlayProps {
   faceLandmarksCount: number | null
   handsCount: number
   isRunning: boolean
+  cameraStreamInfo?: CameraStreamInfo | null
 }
 
-export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning }: DetectionOverlayProps) {
+export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning, cameraStreamInfo = null }: DetectionOverlayProps) {
   if (!isRunning) return null
 
   return (
@@ -21,6 +24,12 @@ export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning }: 
           <span className="info-label">Hands</span>
           <span className={`info-value ${handsCount > 0 ? 'ready' : 'waiting'}`}>
             {handsCount > 0 ? handsCount : 'None'}
+          </span>
+        </div>
+        <div className="info-row">
+          <span className="info-label">Video</span>
+          <span className="info-value ready">
+            {formatCameraStreamInfo(cameraStreamInfo)}
           </span>
         </div>
       </div>

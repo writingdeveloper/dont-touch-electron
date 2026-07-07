@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProximityAnalyzer } from '../../src/detection/ProximityAnalyzer'
-import { HandKeypoints, HeadRegion, Point } from '../../src/detection/types'
+import { FaceLandmarks, HandKeypoints, HeadRegion, Point } from '../../src/detection/types'
 
 function makePoint(x: number, y: number): Point {
   return { x, y, confidence: 1.0 }
@@ -9,9 +9,29 @@ function makePoint(x: number, y: number): Point {
 function makeHead(cx: number, cy: number, w: number, h: number): HeadRegion {
   return {
     nose: makePoint(cx, cy),
+    leftEar: makePoint(cx - w * 0.55, cy - h * 0.08),
+    rightEar: makePoint(cx + w * 0.55, cy - h * 0.08),
     center: makePoint(cx, cy),
     width: w,
     height: h,
+  }
+}
+
+function makeFaceLandmarks(): FaceLandmarks {
+  return {
+    forehead: makePoint(200, 120),
+    leftEyebrow: makePoint(140, 150),
+    rightEyebrow: makePoint(260, 150),
+    leftEye: makePoint(135, 180),
+    rightEye: makePoint(265, 180),
+    noseTip: makePoint(200, 215),
+    noseBridge: makePoint(200, 175),
+    leftCheek: makePoint(135, 235),
+    rightCheek: makePoint(265, 235),
+    upperLip: makePoint(200, 260),
+    lowerLip: makePoint(200, 278),
+    chin: makePoint(200, 330),
+    all: Array.from({ length: 468 }, () => makePoint(200, 200)),
   }
 }
 
@@ -29,6 +49,26 @@ function makeHand(tipX: number, tipY: number): HandKeypoints {
       pinky: tip,
     },
     wrist: makePoint(tipX, tipY + 100),
+  }
+}
+
+function makeHandWithLandmark(index: number, point: Point): HandKeypoints {
+  const far = makePoint(600, 600)
+  const landmarks = Array.from({ length: 21 }, () => far)
+  landmarks[index] = point
+
+  return {
+    landmarks,
+    handedness: 'Right',
+    confidence: 0.9,
+    fingertips: {
+      thumb: far,
+      index: far,
+      middle: far,
+      ring: far,
+      pinky: far,
+    },
+    wrist: far,
   }
 }
 
@@ -252,5 +292,73 @@ describe('ProximityAnalyzer', () => {
     analyzer.updateConfig({ sensitivity: 1.0 })
     const info2 = analyzer.update([handEdge], head)
     expect(info2.isNearHead).toBe(true)
+  })
+
+  it('detects paired zones on either side instead of only the midpoint', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+    expect(analyzer.update([makeHand(face.leftEye.x, face.leftEye.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'eyes',
+    }))
+
+    analyzer.reset()
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+    expect(analyzer.update([makeHand(face.rightEye.x, face.rightEye.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'eyes',
+    }))
+
+    analyzer.reset()
+    analyzer.updateConfig({ enabledZones: ['cheeks'] })
+    expect(analyzer.update([makeHand(face.leftCheek.x, face.leftCheek.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'cheeks',
+    }))
+  })
+
+  it('detects non-fingertip hand landmarks with lower weight', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+    analyzer.updateConfig({ enabledZones: ['cheeks'] })
+
+    const hand = makeHandWithLandmark(7, face.leftCheek)
+    const info = analyzer.update([hand], head, face)
+
+    expect(info.isNearHead).toBe(true)
+    expect(info.activeZone).toBe('cheeks')
+  })
+
+  it('ignores low-confidence contacts', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+    const hand = makeHand(face.leftEye.x, face.leftEye.y)
+    hand.confidence = 0.1
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+
+    expect(analyzer.update([hand], head, face).isNearHead).toBe(false)
+  })
+
+  it('keeps detecting through brief missing-frame jitter', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const hand = makeHand(200, 200)
+
+    analyzer.update([hand], head)
+    expect(analyzer.getState()).toBe('DETECTING')
+
+    expect(analyzer.update([], null).state).toBe('DETECTING')
+    expect(analyzer.update([], null).state).toBe('DETECTING')
+    expect(analyzer.update([], null).state).toBe('IDLE')
+  })
+
+  it('still resets immediately when a tracked hand is clearly far away', () => {
+    const head = makeHead(200, 200, 150, 200)
+    analyzer.update([makeHand(200, 200)], head)
+    expect(analyzer.getState()).toBe('DETECTING')
+
+    const info = analyzer.update([makeHand(600, 600)], head)
+    expect(info.state).toBe('IDLE')
   })
 })

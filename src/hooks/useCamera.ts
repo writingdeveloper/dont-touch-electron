@@ -1,6 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 
 import { STORAGE_KEYS } from '../constants/storage-keys'
+import {
+  CameraQuality,
+  CameraStreamInfo,
+  buildCameraConstraints,
+  getCameraStreamInfo,
+} from '../utils/cameraQuality'
 import { logger } from '../utils/logger'
 import { RecoveryIssue, classifyCameraError } from '../utils/recovery'
 
@@ -13,6 +19,7 @@ interface UseCameraReturn {
   stream: MediaStream | null
   error: RecoveryIssue | null
   devices: VideoDevice[]
+  streamInfo: CameraStreamInfo | null
   selectedDeviceId: string | null
   startCamera: (deviceId?: string | null) => Promise<boolean>
   stopCamera: () => void
@@ -22,8 +29,9 @@ interface UseCameraReturn {
 
 const STORAGE_KEY = STORAGE_KEYS.CAMERA_DEVICE
 
-export function useCamera(): UseCameraReturn {
+export function useCamera(cameraQuality: CameraQuality = 'high'): UseCameraReturn {
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [streamInfo, setStreamInfo] = useState<CameraStreamInfo | null>(null)
   const [error, setError] = useState<RecoveryIssue | null>(null)
   const [devices, setDevices] = useState<VideoDevice[]>([])
   const [selectedDeviceId, setSelectedDeviceIdState] = useState<string | null>(() => {
@@ -98,43 +106,40 @@ export function useCamera(): UseCameraReturn {
         }
         return null
       })
+      setStreamInfo(null)
 
       const targetDeviceId = deviceId === undefined ? selectedDeviceId : deviceId
 
-      const constraints: MediaStreamConstraints = {
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
-          ...(targetDeviceId ? { deviceId: { exact: targetDeviceId } } : {}),
-        },
-        audio: false,
-      }
+      const constraints = buildCameraConstraints(cameraQuality, targetDeviceId)
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+      setStreamInfo(getCameraStreamInfo(mediaStream))
       setStream(mediaStream)
 
       // Update device list after successful camera start
       refreshDevices()
       return true
     } catch (err) {
+      setStreamInfo(null)
       setError(classifyCameraError(err))
       logger.error('Camera error:', err)
       return false
     }
-  }, [selectedDeviceId, refreshDevices])
+  }, [cameraQuality, selectedDeviceId, refreshDevices])
 
   const stopCamera = useCallback(() => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop())
       setStream(null)
     }
+    setStreamInfo(null)
   }, [stream])
 
   return {
     stream,
     error,
     devices,
+    streamInfo,
     selectedDeviceId,
     startCamera,
     stopCamera,

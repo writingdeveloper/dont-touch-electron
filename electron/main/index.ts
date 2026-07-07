@@ -19,6 +19,7 @@ interface AppSettings {
   alertVolume: number
   rightRailCollapsed: boolean
   alertTimeoutDefaultMinutes: 5 | 10 | 15 | 30 | 45 | 60
+  cameraQuality: 'balanced' | 'high' | 'maximum'
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -31,6 +32,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   alertVolume: 0.5,
   rightRailCollapsed: false,
   alertTimeoutDefaultMinutes: 15,
+  cameraQuality: 'high',
 }
 
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
@@ -71,6 +73,10 @@ function isAlertTimeoutDefaultMinutes(value: unknown): value is AppSettings['ale
   return value === 5 || value === 10 || value === 15 || value === 30 || value === 45 || value === 60
 }
 
+function isCameraQuality(value: unknown): value is AppSettings['cameraQuality'] {
+  return value === 'balanced' || value === 'high' || value === 'maximum'
+}
+
 function coerceVolume(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(1, value))
@@ -93,6 +99,9 @@ function coerceAppSettings(value: unknown): AppSettings {
     alertTimeoutDefaultMinutes: isAlertTimeoutDefaultMinutes(parsed.alertTimeoutDefaultMinutes)
       ? parsed.alertTimeoutDefaultMinutes
       : DEFAULT_APP_SETTINGS.alertTimeoutDefaultMinutes,
+    cameraQuality: isCameraQuality(parsed.cameraQuality)
+      ? parsed.cameraQuality
+      : DEFAULT_APP_SETTINGS.cameraQuality,
   }
 }
 

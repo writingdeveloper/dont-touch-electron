@@ -27,6 +27,7 @@ import {
   saveAlertTimeout,
 } from './utils/alertTimeout'
 import { shouldSuppressReminderSideEffects } from './utils/alertGate'
+import { coerceCameraQuality } from './utils/cameraQuality'
 import { AlertSoundService } from './audio/AlertSoundService'
 import { PRESET_BASE_URL } from './audio/soundPresets'
 import { resolveCustomSoundUrl } from './audio/customSoundStorage'
@@ -82,6 +83,7 @@ function App() {
           ...parsed,
           rightRailCollapsed: Boolean(parsed.rightRailCollapsed),
           alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(parsed.alertTimeoutDefaultMinutes),
+          cameraQuality: coerceCameraQuality(parsed.cameraQuality),
         }
       }
     } catch {
@@ -112,6 +114,7 @@ function App() {
       ...merged,
       rightRailCollapsed: Boolean(merged.rightRailCollapsed),
       alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(merged.alertTimeoutDefaultMinutes),
+      cameraQuality: coerceCameraQuality(merged.cameraQuality),
     }
     setAppSettings(updated)
     try {
@@ -194,12 +197,13 @@ function App() {
     stream,
     error: cameraError,
     devices: cameraDevices,
+    streamInfo: cameraStreamInfo,
     selectedDeviceId: selectedCameraId,
     startCamera,
     stopCamera,
     setSelectedDeviceId: setSelectedCameraId,
     refreshDevices,
-  } = useCamera()
+  } = useCamera(appSettings.cameraQuality)
 
   const {
     todayTouchCount,
@@ -527,8 +531,11 @@ function App() {
             onExportData={exportData}
             onImportData={importData}
             cameraDevices={cameraDevices}
+            cameraStreamInfo={cameraStreamInfo}
             selectedCameraId={selectedCameraId}
             onCameraChange={setSelectedCameraId}
+            cameraQuality={appSettings.cameraQuality}
+            onCameraQualityChange={(cameraQuality) => updateAppSettings({ cameraQuality })}
             hidePreview={appSettings.hidePreview}
             onHidePreviewChange={(hide) => updateAppSettings({ hidePreview: hide })}
             closeAction={appSettings.closeAction}
@@ -643,6 +650,7 @@ function App() {
             faceLandmarksCount={faceLandmarksCount}
             handsCount={handsCount}
             hidePreview={appSettings.hidePreview}
+            cameraStreamInfo={cameraStreamInfo}
           />
 
           {/* Progress Bar (when detecting) */}

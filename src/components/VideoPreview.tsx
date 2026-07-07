@@ -1,6 +1,7 @@
 import { RefObject, useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { Language } from '../i18n/translations'
+import { CameraStreamInfo } from '../utils/cameraQuality'
 import { DetectionOverlay } from './DetectionOverlay'
 
 interface VideoPreviewProps {
@@ -10,6 +11,7 @@ interface VideoPreviewProps {
   faceLandmarksCount?: number | null
   handsCount?: number
   hidePreview?: boolean
+  cameraStreamInfo?: CameraStreamInfo | null
 }
 
 // Map language codes to locale codes
@@ -22,7 +24,15 @@ const languageToLocale: Record<Language, string> = {
   ru: 'ru-RU',
 }
 
-export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCount = null, handsCount = 0, hidePreview = false }: VideoPreviewProps) {
+export function VideoPreview({
+  videoRef,
+  canvasRef,
+  isRunning,
+  faceLandmarksCount = null,
+  handsCount = 0,
+  hidePreview = false,
+  cameraStreamInfo = null,
+}: VideoPreviewProps) {
   const { t, language } = useLanguage()
   const [currentTime, setCurrentTime] = useState('')
 
@@ -100,6 +110,7 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
             faceLandmarksCount={faceLandmarksCount}
             handsCount={handsCount}
             isRunning={isRunning}
+            cameraStreamInfo={cameraStreamInfo}
           />
         </>
       )}
@@ -110,6 +121,7 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
           faceLandmarksCount={faceLandmarksCount}
           handsCount={handsCount}
           isRunning={isRunning}
+          cameraStreamInfo={cameraStreamInfo}
         />
       )}
 
