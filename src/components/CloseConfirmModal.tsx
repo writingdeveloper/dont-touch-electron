@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 interface CloseConfirmModalProps {
   onClose: (action: 'quit' | 'tray', remember: boolean) => void
@@ -9,10 +10,20 @@ interface CloseConfirmModalProps {
 export function CloseConfirmModal({ onClose, onCancel }: CloseConfirmModalProps) {
   const { t } = useLanguage()
   const [remember, setRemember] = useState(false)
+  const closeModalRef = useFocusTrap()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
 
   return (
     <div className="close-modal-overlay" onClick={onCancel} role="dialog" aria-modal="true" aria-labelledby="close-modal-title">
-      <div className="close-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="close-modal" ref={closeModalRef} onClick={(e) => e.stopPropagation()}>
         <h3 id="close-modal-title">{t.closeModalTitle || 'Close Application'}</h3>
 
         <div className="close-modal-buttons">
@@ -60,17 +71,17 @@ export function CloseConfirmModal({ onClose, onCancel }: CloseConfirmModalProps)
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 10000;
+          z-index: var(--z-modal-backdrop);
           backdrop-filter: blur(4px);
         }
 
         .close-modal {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          background: #1b1c25;
           border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 16px;
+          border-radius: 8px;
           padding: 24px;
           min-width: 320px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 8px 8px rgba(0, 0, 0, 0.35);
         }
 
         .close-modal h3 {
@@ -120,13 +131,13 @@ export function CloseConfirmModal({ onClose, onCancel }: CloseConfirmModalProps)
         }
 
         .close-modal-btn.tray:hover {
-          background: rgba(0, 255, 136, 0.15);
-          border-color: rgba(0, 255, 136, 0.4);
-          color: #00ff88;
+          background: rgba(52, 211, 153, 0.14);
+          border-color: rgba(52, 211, 153, 0.35);
+          color: #86efac;
         }
 
         .close-modal-btn.tray:hover svg {
-          stroke: #00ff88;
+          stroke: #86efac;
         }
 
         .remember-checkbox {
@@ -143,7 +154,7 @@ export function CloseConfirmModal({ onClose, onCancel }: CloseConfirmModalProps)
         .remember-checkbox input {
           width: 16px;
           height: 16px;
-          accent-color: #00ffff;
+          accent-color: #7dd3fc;
           cursor: pointer;
         }
 

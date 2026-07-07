@@ -254,7 +254,7 @@ export class MediaPipeDetector {
 
     // Draw face outline
     if (faceLandmarks && faceLandmarks.all.length > 0) {
-      ctx.strokeStyle = isNearHead ? 'rgba(255, 68, 68, 0.3)' : 'rgba(0, 255, 255, 0.2)';
+      ctx.strokeStyle = isNearHead ? 'rgba(245, 158, 11, 0.35)' : 'rgba(125, 211, 252, 0.22)';
       ctx.lineWidth = 1;
 
       const faceOvalIndices = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10];
@@ -290,7 +290,7 @@ export class MediaPipeDetector {
 
     // Draw head ellipse
     if (head) {
-      ctx.strokeStyle = isNearHead ? '#FF4444' : '#00FFFF';
+      ctx.strokeStyle = isNearHead ? '#F59E0B' : '#7DD3FC';
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 4]);
 
@@ -300,12 +300,12 @@ export class MediaPipeDetector {
       ctx.setLineDash([]);
 
       // Label
-      ctx.fillStyle = isNearHead ? '#FF4444' : '#00FFFF';
+      ctx.fillStyle = isNearHead ? '#F59E0B' : '#7DD3FC';
       ctx.font = 'bold 14px sans-serif';
       ctx.save();
       ctx.translate(head.center.x + 25, head.center.y - head.height / 2 - 10);
       ctx.scale(-1, 1);
-      ctx.fillText(isNearHead ? 'WARNING' : 'FACE', 0, 0);
+      ctx.fillText(isNearHead ? 'Hand nearby' : 'Face', 0, 0);
       ctx.restore();
     }
 
@@ -336,7 +336,7 @@ export class MediaPipeDetector {
         if (isTip) {
           ctx.beginPath();
           ctx.arc(point.x, point.y, radius + 4, 0, Math.PI * 2);
-          ctx.fillStyle = isNearHead ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 255, 255, 0.3)';
+          ctx.fillStyle = isNearHead ? 'rgba(245, 158, 11, 0.34)' : 'rgba(125, 211, 252, 0.28)';
           ctx.fill();
         }
 

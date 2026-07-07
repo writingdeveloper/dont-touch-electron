@@ -8,11 +8,9 @@ interface AlertOverlayProps {
 
 export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps) {
   const { t } = useLanguage()
-  const [isShaking, setIsShaking] = useState(false)
   const [showHint, setShowHint] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
 
-  // Auto-focus on mount for accessibility
   useEffect(() => {
     overlayRef.current?.focus()
   }, [])
@@ -20,17 +18,16 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
   const handleDismiss = useCallback(() => {
     if (canDismiss) {
       onDismiss?.()
-    } else {
-      setIsShaking(true)
-      setShowHint(true)
-      setTimeout(() => setIsShaking(false), 500)
-      setTimeout(() => setShowHint(false), 2000)
+      return
     }
+
+    setShowHint(true)
+    window.setTimeout(() => setShowHint(false), 2000)
   }, [canDismiss, onDismiss])
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === ' ' || event.key === 'Enter') {
         handleDismiss()
       }
     }
@@ -47,302 +44,165 @@ export function AlertOverlay({ onDismiss, canDismiss = true }: AlertOverlayProps
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="alert-title"
+      aria-describedby="alert-subtitle"
       tabIndex={-1}
     >
-      {/* Animated background lines */}
-      <div className="alert-bg-lines" aria-hidden="true" />
-
-      {/* Corner brackets */}
-      <div className="alert-corner top-left" aria-hidden="true" />
-      <div className="alert-corner top-right" aria-hidden="true" />
-      <div className="alert-corner bottom-left" aria-hidden="true" />
-      <div className="alert-corner bottom-right" aria-hidden="true" />
-
-      <div className={`alert-content-fullscreen ${isShaking ? 'shake' : ''}`}>
-        <div className="alert-warning-badge">
+      <div className="alert-content-fullscreen">
+        <div className="alert-attention-badge">
           <span className="badge-text">{t.alertWarning}</span>
         </div>
 
         <div className="alert-icon-container" aria-hidden="true">
-          <svg className="alert-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
+          <svg className="alert-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 11.5V7a2 2 0 0 1 4 0v3" />
+            <path d="M11 10V5a2 2 0 0 1 4 0v6" />
+            <path d="M15 11V7a2 2 0 0 1 4 0v7a7 7 0 0 1-14 0v-2.5a2 2 0 0 1 4 0V14" />
+            <path d="M4 4l16 16" />
           </svg>
         </div>
 
         <h1 id="alert-title" className="alert-title">{t.alertTitle}</h1>
-        <p className="alert-subtitle">{t.alertSubtitle}</p>
+        <p id="alert-subtitle" className="alert-subtitle">{t.alertSubtitle}</p>
 
         <div className="alert-status" role="status" aria-live="assertive">
           <div className="status-line">
             <span className="status-label">{t.alertStatus}:</span>
-            <span className="status-value danger">{t.alertViolation}</span>
+            <span className="status-value attention">{t.alertViolation}</span>
           </div>
           <div className="status-line">
             <span className="status-label">{t.alertAction}:</span>
-            <span className="status-value">{canDismiss ? t.alertClearToDismiss : t.alertHandStillNear}</span>
+            <span className={`status-value ${canDismiss ? 'clear' : 'pending'}`}>
+              {canDismiss ? t.alertClearToDismiss : t.alertHandStillNear}
+            </span>
           </div>
         </div>
 
-        <div className={`alert-hint ${showHint ? 'hint-warning' : ''}`}>
-          {showHint
-            ? t.alertMoveHandAway
-            : t.alertDismissHint
-          }
+        <div className={`alert-hint ${showHint ? 'hint-attention' : ''}`}>
+          {showHint ? t.alertMoveHandAway : t.alertDismissHint}
         </div>
       </div>
 
       <style>{`
         .alert-overlay-fullscreen {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: linear-gradient(135deg, #1a0000 0%, #330000 50%, #1a0000 100%);
+          inset: 0;
+          background: #14131c;
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 10000;
           cursor: pointer;
-          animation: fadeIn 0.3s ease-out;
           overflow: hidden;
-        }
-
-        .alert-bg-lines {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 40px,
-            rgba(255, 0, 0, 0.03) 40px,
-            rgba(255, 0, 0, 0.03) 80px
-          );
-          animation: scroll-lines 20s linear infinite;
-        }
-
-        @keyframes scroll-lines {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(80px); }
-        }
-
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        .alert-corner {
-          position: absolute;
-          width: 80px;
-          height: 80px;
-          z-index: 1;
-        }
-
-        .alert-corner::before,
-        .alert-corner::after {
-          content: '';
-          position: absolute;
-          background: #ff4444;
-        }
-
-        .alert-corner.top-left {
-          top: 30px;
-          left: 30px;
-        }
-        .alert-corner.top-left::before {
-          width: 4px;
-          height: 100%;
-          left: 0;
-        }
-        .alert-corner.top-left::after {
-          width: 100%;
-          height: 4px;
-          top: 0;
-        }
-
-        .alert-corner.top-right {
-          top: 30px;
-          right: 30px;
-        }
-        .alert-corner.top-right::before {
-          width: 4px;
-          height: 100%;
-          right: 0;
-        }
-        .alert-corner.top-right::after {
-          width: 100%;
-          height: 4px;
-          top: 0;
-        }
-
-        .alert-corner.bottom-left {
-          bottom: 30px;
-          left: 30px;
-        }
-        .alert-corner.bottom-left::before {
-          width: 4px;
-          height: 100%;
-          left: 0;
-        }
-        .alert-corner.bottom-left::after {
-          width: 100%;
-          height: 4px;
-          bottom: 0;
-        }
-
-        .alert-corner.bottom-right {
-          bottom: 30px;
-          right: 30px;
-        }
-        .alert-corner.bottom-right::before {
-          width: 4px;
-          height: 100%;
-          right: 0;
-        }
-        .alert-corner.bottom-right::after {
-          width: 100%;
-          height: 4px;
-          bottom: 0;
+          font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         .alert-content-fullscreen {
+          width: min(760px, calc(100vw - 48px));
           text-align: center;
           color: white;
-          padding: 40px;
-          max-width: 700px;
-          position: relative;
-          z-index: 2;
+          padding: 56px 32px;
         }
 
-        .alert-content-fullscreen.shake {
-          animation: shake 0.5s ease-in-out;
-        }
-
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-15px); }
-          20%, 40%, 60%, 80% { transform: translateX(15px); }
-        }
-
-        .alert-warning-badge {
+        .alert-attention-badge {
           display: inline-block;
-          padding: 8px 30px;
-          background: #ff4444;
-          border-radius: 4px;
-          margin-bottom: 30px;
-          animation: badge-pulse 1s ease-in-out infinite;
-        }
-
-        @keyframes badge-pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(255, 68, 68, 0.5); }
-          50% { box-shadow: 0 0 40px rgba(255, 68, 68, 0.8); }
+          padding: 10px 24px;
+          background: rgba(245, 158, 11, 0.16);
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          border-radius: 999px;
+          margin-bottom: 34px;
         }
 
         .badge-text {
           font-size: 14px;
-          font-weight: bold;
-          letter-spacing: 4px;
-          font-family: monospace;
+          font-weight: 700;
+          letter-spacing: 0;
+          color: #fbbf24;
         }
 
         .alert-icon-container {
-          margin-bottom: 30px;
+          margin-bottom: 34px;
         }
 
         .alert-icon-svg {
-          width: 100px;
-          height: 100px;
-          color: #ff4444;
-          animation: icon-pulse 1s ease-in-out infinite;
-        }
-
-        @keyframes icon-pulse {
-          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255, 68, 68, 0.5)); }
-          50% { transform: scale(1.05); filter: drop-shadow(0 0 20px rgba(255, 68, 68, 0.8)); }
+          width: 124px;
+          height: 124px;
+          color: #f59e0b;
         }
 
         .alert-title {
-          font-size: 42px;
-          font-weight: bold;
-          margin: 0 0 15px 0;
-          letter-spacing: 3px;
-          text-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
-          font-family: 'Segoe UI', sans-serif;
+          font-size: clamp(34px, 6vw, 52px);
+          font-weight: 750;
+          margin: 0 0 18px 0;
+          letter-spacing: 0;
         }
 
         .alert-subtitle {
-          font-size: 18px;
-          color: #ffbbbb;
-          margin: 0 0 40px 0;
-          letter-spacing: 1px;
+          font-size: clamp(18px, 3vw, 22px);
+          color: #fef3c7;
+          margin: 0 0 46px 0;
+          letter-spacing: 0;
         }
 
         .alert-status {
-          background: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 68, 68, 0.3);
-          border-radius: 8px;
-          padding: 20px 30px;
-          margin-bottom: 30px;
-          display: inline-block;
+          background: rgba(0, 0, 0, 0.4);
+          border: 1px solid rgba(245, 158, 11, 0.28);
+          border-radius: 12px;
+          padding: 24px 32px;
+          margin: 0 auto 36px;
+          width: min(440px, 100%);
         }
 
         .status-line {
           display: flex;
           align-items: center;
-          gap: 15px;
-          margin: 8px 0;
-          font-family: monospace;
-          font-size: 14px;
+          justify-content: space-between;
+          gap: 20px;
+          margin: 12px 0;
+          font-size: 16px;
         }
 
         .status-label {
-          color: #aaa;
-          letter-spacing: 1px;
+          color: #94a3b8;
+          letter-spacing: 0;
         }
 
         .status-value {
-          color: #00ff88;
-          font-weight: bold;
-          letter-spacing: 1px;
+          font-weight: 700;
+          letter-spacing: 0;
         }
 
-        .status-value.danger {
-          color: #ff6b6b;
-          animation: blink 0.5s ease-in-out infinite;
+        .status-value.attention,
+        .status-value.pending {
+          color: #fbbf24;
         }
 
-        @keyframes blink {
-          0%, 50%, 100% { opacity: 1; }
-          25%, 75% { opacity: 0.5; }
+        .status-value.clear {
+          color: #86efac;
         }
 
         .alert-hint {
-          font-size: 14px;
-          color: rgba(255, 255, 255, 0.5);
-          padding: 12px 25px;
-          background: rgba(0, 0, 0, 0.2);
-          border-radius: 25px;
           display: inline-block;
-          transition: all 0.3s ease;
-          font-family: monospace;
-          letter-spacing: 0.5px;
+          border-radius: 999px;
+          padding: 12px 24px;
+          background: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.72);
+          font-size: 15px;
+          letter-spacing: 0;
         }
 
-        .alert-hint.hint-warning {
-          color: #FFD700;
-          background: rgba(255, 215, 0, 0.15);
-          font-weight: bold;
-          animation: hint-pulse 0.5s ease-in-out infinite;
+        .alert-hint.hint-attention {
+          background: rgba(245, 158, 11, 0.14);
+          color: #fef3c7;
         }
 
-        @keyframes hint-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.02); }
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
         }
       `}</style>
     </div>

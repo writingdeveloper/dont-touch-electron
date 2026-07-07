@@ -5,16 +5,28 @@ import { useStatistics } from './hooks/useStatistics'
 import { VideoPreview } from './components/VideoPreview'
 import { Controls } from './components/Controls'
 import { SettingsPanel } from './components/SettingsPanel'
-import { DailyStatsCard } from './components/DailyStatsCard'
+import { ActivityRail } from './components/ActivityRail'
 import { MeditationModal } from './components/MeditationModal'
 import { CalendarView } from './components/CalendarView'
 import { AboutModal } from './components/AboutModal'
 import { CloseConfirmModal } from './components/CloseConfirmModal'
+import { RecoveryPanel } from './components/RecoveryPanel'
 import { useLanguage } from './i18n/LanguageContext'
-import { AppSettings, DEFAULT_APP_SETTINGS } from './types/app-settings'
+import { AlertTimeoutState, AppSettings, DEFAULT_APP_SETTINGS } from './types/app-settings'
 import { STORAGE_KEYS } from './constants/storage-keys'
 import { IPC_CHANNELS } from './constants/ipc-channels'
 import { safeInvoke } from './utils/ipc'
+import {
+  clearAlertTimeout,
+  coerceAlertTimeoutMinutes,
+  createAlertTimeout,
+  formatAlertTimeoutRemaining,
+  getAlertTimeoutRemainingMs,
+  isAlertTimeoutActive,
+  loadAlertTimeout,
+  saveAlertTimeout,
+} from './utils/alertTimeout'
+import { shouldSuppressReminderSideEffects } from './utils/alertGate'
 import { AlertSoundService } from './audio/AlertSoundService'
 import { PRESET_BASE_URL } from './audio/soundPresets'
 import { resolveCustomSoundUrl } from './audio/customSoundStorage'
@@ -37,6 +49,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isRunning, setIsRunning] = useState(false)
+  const [isStartingCamera, setIsStartingCamera] = useState(false)
   const [showAlert, setShowAlert] = useState(false)
   const [showMeditationModal, setShowMeditationModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
@@ -44,6 +57,13 @@ function App() {
   const [showCloseModal, setShowCloseModal] = useState(false)
   const [appVersion, setAppVersion] = useState('')
   const detectingStartTimeRef = useRef<number | null>(null)
+  const [setupComplete, setSetupComplete] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.SETUP_COMPLETE) === 'true'
+    } catch {
+      return false
+    }
+  })
 
   // Update notification state
   const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null)
@@ -57,16 +77,42 @@ function App() {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS)
       if (stored) {
-        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
+        const parsed = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }
+        return {
+          ...parsed,
+          rightRailCollapsed: Boolean(parsed.rightRailCollapsed),
+          alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(parsed.alertTimeoutDefaultMinutes),
+        }
       }
     } catch {
       // Ignore
     }
     return DEFAULT_APP_SETTINGS
   })
+  const [alertTimeout, setAlertTimeout] = useState<AlertTimeoutState | null>(() => {
+    try {
+      return loadAlertTimeout(localStorage)
+    } catch {
+      return null
+    }
+  })
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [resumeAfterHandClear, setResumeAfterHandClear] = useState(false)
+
+  const alertTimeoutActive = isAlertTimeoutActive(alertTimeout, nowMs)
+  const alertTimeoutRemainingMs = getAlertTimeoutRemainingMs(alertTimeout, nowMs)
+  const remindersSuppressed = shouldSuppressReminderSideEffects({
+    alertTimeoutActive,
+    resumeAfterHandClear,
+  })
 
   const updateAppSettings = (newSettings: Partial<AppSettings>) => {
-    const updated = { ...appSettings, ...newSettings }
+    const merged = { ...appSettings, ...newSettings }
+    const updated = {
+      ...merged,
+      rightRailCollapsed: Boolean(merged.rightRailCollapsed),
+      alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(merged.alertTimeoutDefaultMinutes),
+    }
     setAppSettings(updated)
     try {
       localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(updated))
@@ -152,6 +198,7 @@ function App() {
     startCamera,
     stopCamera,
     setSelectedDeviceId: setSelectedCameraId,
+    refreshDevices,
   } = useCamera()
 
   const {
@@ -181,6 +228,7 @@ function App() {
     handsCount,
     startDetection,
     stopDetection,
+    retryModelLoad,
     isHandNearHead,
     updateConfig,
   } = useDetection({
@@ -190,7 +238,55 @@ function App() {
   })
 
   useEffect(() => {
+    if (!alertTimeout) return
+
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [alertTimeout])
+
+  useEffect(() => {
+    if (!alertTimeout) return
+
+    if (!alertTimeoutActive) {
+      clearAlertTimeout(localStorage)
+      setAlertTimeout(null)
+      setResumeAfterHandClear(isRunning && isHandNearHead())
+    }
+  }, [alertTimeout, alertTimeoutActive, isHandNearHead, isRunning])
+
+  useEffect(() => {
+    if (resumeAfterHandClear && !isHandNearHead()) {
+      setResumeAfterHandClear(false)
+    }
+  }, [resumeAfterHandClear, isHandNearHead, isNearHead])
+
+  const handleStartAlertTimeout = useCallback(() => {
+    const timeout = createAlertTimeout(appSettings.alertTimeoutDefaultMinutes)
+    setNowMs(Date.now())
+    setAlertTimeout(timeout)
+    setResumeAfterHandClear(false)
+    saveAlertTimeout(localStorage, timeout)
+
+    alertSoundServiceRef.current.stop()
+    if (showAlert) {
+      setShowAlert(false)
+      safeInvoke(IPC_CHANNELS.HIDE_FULLSCREEN_ALERT)
+    }
+  }, [appSettings.alertTimeoutDefaultMinutes, showAlert])
+
+  const handleStopAlertTimeout = useCallback(() => {
+    clearAlertTimeout(localStorage)
+    setAlertTimeout(null)
+    setNowMs(Date.now())
+    setResumeAfterHandClear(isRunning && isHandNearHead())
+  }, [isHandNearHead, isRunning])
+
+  useEffect(() => {
     if (detectionState === 'DETECTING') {
+      if (remindersSuppressed) {
+        detectingStartTimeRef.current = null
+        return
+      }
       // Set the start time once, when detection begins — NOT on every activeZone
       // change (the fingertip drifts across zones each frame, which previously kept
       // resetting this ref and under-reported the touch duration).
@@ -199,22 +295,26 @@ function App() {
       }
     } else if (detectionState === 'ALERT' && detectingStartTimeRef.current !== null) {
       const duration = Date.now() - detectingStartTimeRef.current
-      recordTouch(duration, activeZone)
+      if (!remindersSuppressed) {
+        recordTouch(duration, activeZone)
+      }
       detectingStartTimeRef.current = null
     } else if (detectionState === 'IDLE' || detectionState === 'COOLDOWN') {
       // Detection ended (with or without an alert) — reset for the next cycle.
       detectingStartTimeRef.current = null
     }
-  }, [detectionState, activeZone, recordTouch])
+  }, [detectionState, activeZone, recordTouch, remindersSuppressed])
 
   useEffect(() => {
-    if (shouldRecommendMeditation && !showMeditationModal && !showAlert) {
+    if (shouldRecommendMeditation && !showMeditationModal && !showAlert && !remindersSuppressed) {
       setShowMeditationModal(true)
       setMeditationRecommended()
     }
-  }, [shouldRecommendMeditation, showMeditationModal, showAlert, setMeditationRecommended])
+  }, [shouldRecommendMeditation, showMeditationModal, showAlert, setMeditationRecommended, remindersSuppressed])
 
   function handleAlert() {
+    if (remindersSuppressed) return
+
     setShowAlert(true)
 
     safeInvoke(IPC_CHANNELS.SHOW_FULLSCREEN_ALERT, {
@@ -310,10 +410,37 @@ function App() {
       stopCamera()
       setIsRunning(false)
     } else {
-      await startCamera()
-      setIsRunning(true)
+      setIsStartingCamera(true)
+      try {
+        const started = await startCamera()
+        setIsRunning(started)
+      } finally {
+        setIsStartingCamera(false)
+      }
     }
   }, [isRunning, startCamera, stopCamera, stopDetection])
+
+  const handleRetryCamera = useCallback(async (useDefaultCamera = false) => {
+    if (useDefaultCamera) {
+      setSelectedCameraId(null)
+    }
+    setIsStartingCamera(true)
+    try {
+      const started = await startCamera(useDefaultCamera ? null : undefined)
+      setIsRunning(started)
+    } finally {
+      setIsStartingCamera(false)
+    }
+  }, [setSelectedCameraId, startCamera])
+
+  const handleSetupComplete = useCallback(() => {
+    setSetupComplete(true)
+    try {
+      localStorage.setItem(STORAGE_KEYS.SETUP_COMPLETE, 'true')
+    } catch {
+      // Ignore storage errors
+    }
+  }, [])
 
   // Tray "Start/Stop Detection" sends this; mirror the in-app toggle so the tray
   // control actually starts/stops detection (it previously had no renderer listener).
@@ -348,14 +475,22 @@ function App() {
 
   const getStatusText = () => {
     if (!isModelLoaded) return { text: t.statusInit, color: '#ffa500' }
-    if (!isRunning) return { text: t.statusStandby, color: '#666' }
-    if (detectionState === 'ALERT') return { text: t.statusAlert, color: '#ff4444' }
-    if (detectionState === 'DETECTING') return { text: t.statusDetecting, color: '#ffa500' }
-    if (detectionState === 'COOLDOWN') return { text: t.statusCooldown, color: '#666' }
-    return { text: t.statusMonitoring, color: '#00ff88' }
+    if (!isRunning) return { text: t.statusStandby, color: '#94a3b8' }
+    if (alertTimeoutActive) {
+      return {
+        text: `${t.alertTimeoutButton} · ${formatAlertTimeoutRemaining(alertTimeoutRemainingMs)}`,
+        color: '#7dd3fc',
+      }
+    }
+    if (resumeAfterHandClear) return { text: t.alertTimeoutClearToResume, color: '#fbbf24' }
+    if (detectionState === 'ALERT') return { text: t.statusAlert, color: '#f59e0b' }
+    if (detectionState === 'DETECTING') return { text: t.statusDetecting, color: '#f59e0b' }
+    if (detectionState === 'COOLDOWN') return { text: t.statusCooldown, color: '#94a3b8' }
+    return { text: t.statusMonitoring, color: '#34d399' }
   }
 
   const status = getStatusText()
+  const recoveryIssues = [cameraError, modelError].filter((issue): issue is NonNullable<typeof issue> => Boolean(issue))
 
   return (
     <div className="app-container">
@@ -363,7 +498,11 @@ function App() {
       <header className="app-header">
         <div className="header-left">
           <div className="app-logo">
-            <span className="logo-icon">🛡️</span>
+            <span className="logo-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3l7 3v5c0 4.5-2.8 8.5-7 10-4.2-1.5-7-5.5-7-10V6l7-3z" />
+              </svg>
+            </span>
             <span className="logo-text">{t.appTitle}</span>
             {appVersion && <span className="app-version">v{appVersion}</span>}
           </div>
@@ -398,6 +537,8 @@ function App() {
             alertVolume={appSettings.alertVolume}
             onAlertSoundChange={(changes) => updateAppSettings(changes)}
             onPreviewSound={(id) => void alertSoundServiceRef.current.preview(id, appSettings.alertVolume)}
+            alertTimeoutDefaultMinutes={appSettings.alertTimeoutDefaultMinutes}
+            onAlertTimeoutDefaultChange={(minutes) => updateAppSettings({ alertTimeoutDefaultMinutes: minutes })}
           />
           <div className="window-controls">
             <button
@@ -417,7 +558,11 @@ function App() {
           <div className="update-banner-content">
             {updateDownloaded ? (
               <>
-                <span className="update-banner-icon">✅</span>
+                <span className="update-banner-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </span>
                 <span className="update-banner-text">
                   {t.updateAvailable}: v{updateAvailable.newVersion}
                 </span>
@@ -430,7 +575,12 @@ function App() {
               </>
             ) : updateDownloading ? (
               <>
-                <span className="update-banner-icon">⏳</span>
+                <span className="update-banner-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                </span>
                 <span className="update-banner-text">
                   {t.updateDownloading} {updateProgress.toFixed(0)}%
                 </span>
@@ -440,7 +590,11 @@ function App() {
               </>
             ) : (
               <>
-                <span className="update-banner-icon">🎉</span>
+                <span className="update-banner-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" />
+                  </svg>
+                </span>
                 <span className="update-banner-text">
                   {t.updateAvailable}: v{updateAvailable.newVersion}
                 </span>
@@ -492,7 +646,7 @@ function App() {
           />
 
           {/* Progress Bar (when detecting) */}
-          {(detectionState === 'DETECTING' || detectionState === 'COOLDOWN') && (
+          {(detectionState === 'DETECTING' || detectionState === 'COOLDOWN') && !remindersSuppressed && (
             <div className="detection-progress">
               <div
                 className={`progress-fill ${detectionState === 'DETECTING' ? 'warning' : 'cooldown'}`}
@@ -502,54 +656,42 @@ function App() {
           )}
         </div>
 
-        {/* Side Panel */}
-        <aside className="side-panel">
-          <DailyStatsCard
-            stats={todayStats}
-            progress={progress}
-            settings={habitSettings}
-          />
-
-          <div className="quick-actions">
-            <button className="quick-btn" onClick={() => setShowCalendar(true)}>
-              <span>📅</span>
-              <span>{t.calendarTitle || '기록'}</span>
-            </button>
-            <button className="quick-btn meditation" onClick={() => setShowMeditationModal(true)}>
-              <span>🧘</span>
-              <span>{t.meditationButton || '명상'}</span>
-            </button>
-          </div>
-
-          <div className="zone-info">
-            <span className="zone-title">{t.settingsDetectionZones}</span>
-            <div className="zone-list">
-              {config.enabledZones.map((zone) => (
-                <span key={zone} className={`zone-tag ${activeZone === zone ? 'active' : ''}`}>
-                  {t[`zone${zone.charAt(0).toUpperCase() + zone.slice(1)}` as keyof typeof t]}
-                </span>
-              ))}
-            </div>
-          </div>
-        </aside>
+        <ActivityRail
+          collapsed={appSettings.rightRailCollapsed}
+          todayStats={todayStats}
+          progress={progress}
+          habitSettings={habitSettings}
+          setupComplete={setupComplete}
+          enabledZones={config.enabledZones}
+          activeZone={activeZone}
+          onToggleCollapsed={() => updateAppSettings({ rightRailCollapsed: !appSettings.rightRailCollapsed })}
+          onOpenCalendar={() => setShowCalendar(true)}
+          onOpenMeditation={() => setShowMeditationModal(true)}
+          onSetupComplete={handleSetupComplete}
+        />
       </main>
+
+      <RecoveryPanel
+        issues={recoveryIssues}
+        onRetryCamera={handleRetryCamera}
+        onRefreshCameras={() => void refreshDevices()}
+        onRetryModel={retryModelLoad}
+      />
 
       {/* Footer Controls */}
       <footer className="app-footer">
         <Controls
           isRunning={isRunning}
           isModelLoaded={isModelLoaded}
+          isStarting={isStartingCamera}
           onToggle={handleToggle}
+          isAlertTimeoutActive={alertTimeoutActive}
+          alertTimeoutRemainingLabel={formatAlertTimeoutRemaining(alertTimeoutRemainingMs)}
+          alertTimeoutDisabled={!isRunning}
+          onStartAlertTimeout={handleStartAlertTimeout}
+          onStopAlertTimeout={handleStopAlertTimeout}
         />
       </footer>
-
-      {/* Error */}
-      {(cameraError || modelError) && (
-        <div className="error-toast">
-          {cameraError && <div>{t.cameraError}: {cameraError}</div>}
-          {modelError && <div>{t.controlLoading} {modelError}</div>}
-        </div>
-      )}
 
       {/* Modals */}
       {showMeditationModal && (

@@ -92,13 +92,9 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
         </div>
       )}
 
-      {/* Tech overlay decorations */}
+      {/* Live detection overlay */}
       {isRunning && !hidePreview && (
         <>
-          <div className="corner-bracket top-left" />
-          <div className="corner-bracket top-right" />
-          <div className="corner-bracket bottom-left" />
-          <div className="corner-bracket bottom-right" />
           <div className="timestamp">{currentTime}</div>
           <DetectionOverlay
             faceLandmarksCount={faceLandmarksCount}
@@ -129,95 +125,32 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
           </div>
           <span className="placeholder-title">{t.videoCameraOffline}</span>
           <p className="placeholder-hint">{t.videoInitialize}</p>
+          <div className="placeholder-status-list" aria-label="Monitoring readiness">
+            <span>
+              <span className="status-dot off" aria-hidden="true" />
+              Camera off
+            </span>
+            <span>
+              <span className="status-dot local" aria-hidden="true" />
+              Local processing
+            </span>
+            <span>
+              <span className="status-dot private" aria-hidden="true" />
+              Preview optional
+            </span>
+          </div>
         </div>
       )}
 
       <style>{`
-        .corner-bracket {
-          position: absolute;
-          width: 40px;
-          height: 40px;
-          z-index: 15;
-          pointer-events: none;
-        }
-
-        .corner-bracket::before,
-        .corner-bracket::after {
-          content: '';
-          position: absolute;
-          background: #00ffff;
-          opacity: 0.7;
-        }
-
-        .top-left {
-          top: 15px;
-          left: 15px;
-        }
-        .top-left::before {
-          width: 3px;
-          height: 100%;
-          left: 0;
-        }
-        .top-left::after {
-          width: 100%;
-          height: 3px;
-          top: 0;
-        }
-
-        .top-right {
-          top: 15px;
-          right: 15px;
-        }
-        .top-right::before {
-          width: 3px;
-          height: 100%;
-          right: 0;
-        }
-        .top-right::after {
-          width: 100%;
-          height: 3px;
-          top: 0;
-        }
-
-        .bottom-left {
-          bottom: 15px;
-          left: 15px;
-        }
-        .bottom-left::before {
-          width: 3px;
-          height: 100%;
-          left: 0;
-        }
-        .bottom-left::after {
-          width: 100%;
-          height: 3px;
-          bottom: 0;
-        }
-
-        .bottom-right {
-          bottom: 15px;
-          right: 15px;
-        }
-        .bottom-right::before {
-          width: 3px;
-          height: 100%;
-          right: 0;
-        }
-        .bottom-right::after {
-          width: 100%;
-          height: 3px;
-          bottom: 0;
-        }
-
         .timestamp {
           position: absolute;
           bottom: 25px;
           left: 70px;
-          font-size: 14px;
-          font-family: 'Consolas', monospace;
-          color: rgba(255, 255, 255, 0.7);
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.58);
           z-index: 15;
-          letter-spacing: 1px;
+          letter-spacing: 0;
         }
 
         .video-placeholder {
@@ -233,24 +166,55 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
         .camera-icon {
           margin-bottom: 1.5rem;
           opacity: 0.3;
-          color: #00ffff;
+          color: #7dd3fc;
         }
 
         .placeholder-title {
           font-size: 18px;
           font-weight: 600;
-          color: #00ffff;
-          opacity: 0.6;
-          letter-spacing: 3px;
+          color: #cbd5e1;
+          opacity: 0.76;
+          letter-spacing: 0;
           margin-bottom: 8px;
-          font-family: monospace;
         }
 
         .placeholder-hint {
           font-size: 13px;
-          opacity: 0.4;
-          color: #888;
+          color: #94a3b8;
           margin: 0;
+        }
+
+        .placeholder-status-list {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 18px;
+          max-width: 360px;
+        }
+
+        .placeholder-status-list span {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #cbd5e1;
+          font-size: 12px;
+        }
+
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #94a3b8;
+        }
+
+        .status-dot.local,
+        .status-dot.private {
+          background: #34d399;
         }
 
         .hidden-preview-indicator {
@@ -263,29 +227,28 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%);
+          background: rgba(17, 24, 39, 0.96);
           z-index: 10;
         }
 
         .hidden-icon {
           margin-bottom: 16px;
-          color: #00ffff;
+          color: #7dd3fc;
           opacity: 0.5;
         }
 
         .hidden-text {
           font-size: 16px;
           font-weight: 600;
-          color: #00ffff;
+          color: #cbd5e1;
           opacity: 0.7;
-          letter-spacing: 2px;
+          letter-spacing: 0;
           margin-bottom: 8px;
-          font-family: monospace;
         }
 
         .hidden-hint {
           font-size: 12px;
-          color: #00ff88;
+          color: #86efac;
           opacity: 0.6;
           display: flex;
           align-items: center;
@@ -296,14 +259,8 @@ export function VideoPreview({ videoRef, canvasRef, isRunning, faceLandmarksCoun
           content: '';
           width: 6px;
           height: 6px;
-          background: #00ff88;
+          background: #34d399;
           border-radius: 50%;
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 0.4; transform: scale(0.8); }
-          50% { opacity: 1; transform: scale(1.2); }
         }
       `}</style>
     </div>

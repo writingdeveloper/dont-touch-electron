@@ -3,13 +3,29 @@ import { useLanguage } from '../i18n/LanguageContext'
 import { Language, languageNames } from '../i18n/translations'
 import { HabitSettings, ExportData } from '../types/statistics'
 import { DetectionZone, HAIR_ZONES, FACE_ZONES } from '../detection/types'
-import { AppSettings, DEFAULT_APP_SETTINGS } from '../types/app-settings'
+import {
+  ALERT_TIMEOUT_MINUTES,
+  AlertTimeoutMinutes,
+  AppSettings,
+  DEFAULT_APP_SETTINGS,
+} from '../types/app-settings'
 import { STORAGE_KEYS } from '../constants/storage-keys'
 import { IPC_CHANNELS } from '../constants/ipc-channels'
 import { safeInvoke } from '../utils/ipc'
 import { clampFloat, clampInt } from '../utils/validation'
 import { TONE_PRESETS, VOICE_PRESETS } from '../audio/soundPresets'
 import { listCustomSounds, addCustomSound, deleteCustomSound, type CustomSoundEntry } from '../audio/customSoundStorage'
+import { useFocusTrap } from '../hooks/useFocusTrap'
+
+type SettingsTab = 'setup' | 'detection' | 'alerts' | 'habit' | 'privacy' | 'app'
+const SETTINGS_TAB_ORDER: SettingsTab[] = ['setup', 'detection', 'alerts', 'habit', 'privacy', 'app']
+type SettingsNotice = { kind: 'success' | 'error' | 'info'; message: string } | null
+
+const DETECTION_PRESETS: Record<'gentle' | 'balanced' | 'strict', Pick<DetectionConfig, 'sensitivity' | 'triggerTime' | 'cooldownTime'>> = {
+  gentle: { sensitivity: 0.35, triggerTime: 1.6, cooldownTime: 3.5 },
+  balanced: { sensitivity: 0.5, triggerTime: 1.0, cooldownTime: 2.0 },
+  strict: { sensitivity: 0.72, triggerTime: 0.7, cooldownTime: 1.5 },
+}
 
 interface DetectionConfig {
   triggerTime: number
@@ -42,6 +58,8 @@ interface SettingsPanelProps {
   alertVolume: number
   onAlertSoundChange: (changes: { alertSoundId?: string; alertVolume?: number }) => void
   onPreviewSound: (id: string) => void
+  alertTimeoutDefaultMinutes: AlertTimeoutMinutes
+  onAlertTimeoutDefaultChange: (minutes: AlertTimeoutMinutes) => void
 }
 
 export function SettingsPanel({
@@ -62,14 +80,19 @@ export function SettingsPanel({
   alertVolume,
   onAlertSoundChange,
   onPreviewSound,
+  alertTimeoutDefaultMinutes,
+  onAlertTimeoutDefaultChange,
 }: SettingsPanelProps) {
   const { t, language, setLanguage } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'detection' | 'habit' | 'sound' | 'data' | 'app'>('detection')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('setup')
+  const [isDetectionAdvancedOpen, setIsDetectionAdvancedOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const settingsPanelRef = useFocusTrap(isOpen)
 
   const [customSounds, setCustomSounds] = useState<CustomSoundEntry[]>([])
   const [allLanguages, setAllLanguages] = useState(false)
+  const [settingsNotice, setSettingsNotice] = useState<SettingsNotice>(null)
   const soundFileInputRef = useRef<HTMLInputElement>(null)
 
   const refreshCustomSounds = useCallback(async () => {
@@ -80,9 +103,33 @@ export function SettingsPanel({
     void refreshCustomSounds()
   }, [refreshCustomSounds])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
+
   const visibleVoices = useMemo(() => {
     return allLanguages ? VOICE_PRESETS : VOICE_PRESETS.filter(v => v.language === language)
   }, [allLanguages, language])
+
+  const selectedDetectionPreset = useMemo(() => {
+    return (Object.keys(DETECTION_PRESETS) as Array<keyof typeof DETECTION_PRESETS>).find((presetName) => {
+      const preset = DETECTION_PRESETS[presetName]
+      return (
+        Math.abs(config.sensitivity - preset.sensitivity) < 0.01 &&
+        Math.abs(config.triggerTime - preset.triggerTime) < 0.01 &&
+        Math.abs(config.cooldownTime - preset.cooldownTime) < 0.01
+      )
+    }) ?? null
+  }, [config.cooldownTime, config.sensitivity, config.triggerTime])
 
   const handleSoundUploadClick = () => soundFileInputRef.current?.click()
 
@@ -94,8 +141,9 @@ export function SettingsPanel({
     if (entry) {
       await refreshCustomSounds()
       onAlertSoundChange({ alertSoundId: entry.id })
+      setSettingsNotice({ kind: 'success', message: `${entry.originalName} added` })
     } else {
-      alert(t.settingsImportError)
+      setSettingsNotice({ kind: 'error', message: t.settingsImportError })
     }
   }
 
@@ -103,6 +151,7 @@ export function SettingsPanel({
     await deleteCustomSound(id)
     await refreshCustomSounds()
     if (alertSoundId === id) onAlertSoundChange({ alertSoundId: 'tone-chime' })
+    setSettingsNotice({ kind: 'info', message: t.settingsSoundDelete })
   }
 
   // Debounced slider state — local values update instantly, callbacks fire after 150ms
@@ -133,6 +182,33 @@ export function SettingsPanel({
     if (configTimerRef.current) clearTimeout(configTimerRef.current)
     configTimerRef.current = setTimeout(() => onConfigChange(changes), 150)
   }, [onConfigChange])
+
+  const applyDetectionPreset = useCallback((presetName: keyof typeof DETECTION_PRESETS) => {
+    const preset = DETECTION_PRESETS[presetName]
+    setLocalSensitivity(preset.sensitivity)
+    setLocalTriggerTime(preset.triggerTime)
+    setLocalCooldownTime(preset.cooldownTime)
+    setIsDetectionAdvancedOpen(false)
+    onConfigChange(preset)
+  }, [onConfigChange])
+
+  const handleSettingsTabKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+
+    event.preventDefault()
+    const currentIndex = SETTINGS_TAB_ORDER.indexOf(activeTab)
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? SETTINGS_TAB_ORDER.length - 1
+          : event.key === 'ArrowLeft'
+            ? (currentIndex - 1 + SETTINGS_TAB_ORDER.length) % SETTINGS_TAB_ORDER.length
+            : (currentIndex + 1) % SETTINGS_TAB_ORDER.length
+    const nextTab = SETTINGS_TAB_ORDER[nextIndex]
+    setActiveTab(nextTab)
+    requestAnimationFrame(() => document.getElementById(`settings-tab-${nextTab}`)?.focus())
+  }, [activeTab])
 
   const debouncedHabitChange = useCallback((changes: Partial<HabitSettings>) => {
     if (habitTimerRef.current) clearTimeout(habitTimerRef.current)
@@ -186,6 +262,7 @@ export function SettingsPanel({
     a.download = `dont-touch-data-${data.exportedAt.split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
+    setSettingsNotice({ kind: 'success', message: t.settingsExportSuccess })
   }
 
   const handleImportClick = () => {
@@ -201,18 +278,18 @@ export function SettingsPanel({
       try {
         const result = event.target?.result
         if (typeof result !== 'string') {
-          alert(t.settingsImportError)
+          setSettingsNotice({ kind: 'error', message: t.settingsImportError })
           return
         }
         const data = JSON.parse(result)
         const success = onImportData(data)
         if (success) {
-          alert(t.settingsImportSuccess)
+          setSettingsNotice({ kind: 'success', message: t.settingsImportSuccess })
         } else {
-          alert(t.settingsImportError)
+          setSettingsNotice({ kind: 'error', message: t.settingsImportError })
         }
       } catch {
-        alert(t.settingsImportError)
+        setSettingsNotice({ kind: 'error', message: t.settingsImportError })
       }
     }
     reader.readAsText(file)
@@ -235,49 +312,111 @@ export function SettingsPanel({
       </button>
 
       {isOpen && (
-        <div className="settings-panel">
+        <div className="settings-backdrop" onMouseDown={() => setIsOpen(false)}>
+        <div
+          className="settings-panel"
+          ref={settingsPanelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-title"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
           <div className="settings-header">
-            <h3>{t.settingsTitle}</h3>
-            <button className="close-btn" onClick={() => setIsOpen(false)}>×</button>
+            <h3 id="settings-title">{t.settingsTitle}</h3>
+            <button className="close-btn" onClick={() => setIsOpen(false)} aria-label="Close settings">×</button>
           </div>
 
-          <div className="settings-tabs">
+          <div className="settings-tabs" role="tablist" aria-label="Settings sections" onKeyDown={handleSettingsTabKeyDown}>
             <button
+              id="settings-tab-setup"
+              role="tab"
+              aria-selected={activeTab === 'setup'}
+              aria-controls="settings-panel-setup"
+              tabIndex={activeTab === 'setup' ? 0 : -1}
+              className={`tab-btn ${activeTab === 'setup' ? 'active' : ''}`}
+              onClick={() => setActiveTab('setup')}
+            >
+              Setup
+            </button>
+            <button
+              id="settings-tab-detection"
+              role="tab"
+              aria-selected={activeTab === 'detection'}
+              aria-controls="settings-panel-detection"
+              tabIndex={activeTab === 'detection' ? 0 : -1}
               className={`tab-btn ${activeTab === 'detection' ? 'active' : ''}`}
               onClick={() => setActiveTab('detection')}
             >
               {t.settingsTabDetection || 'Detection'}
             </button>
             <button
-              className={`tab-btn ${activeTab === 'habit' ? 'active' : ''}`}
-              onClick={() => setActiveTab('habit')}
-            >
-              {t.settingsTabHabit || 'Habit'}
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'sound' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sound')}
+              id="settings-tab-alerts"
+              role="tab"
+              aria-selected={activeTab === 'alerts'}
+              aria-controls="settings-panel-alerts"
+              tabIndex={activeTab === 'alerts' ? 0 : -1}
+              className={`tab-btn ${activeTab === 'alerts' ? 'active' : ''}`}
+              onClick={() => setActiveTab('alerts')}
             >
               {t.settingsTabSound}
             </button>
             <button
+              id="settings-tab-habit"
+              role="tab"
+              aria-selected={activeTab === 'habit'}
+              aria-controls="settings-panel-habit"
+              tabIndex={activeTab === 'habit' ? 0 : -1}
+              className={`tab-btn ${activeTab === 'habit' ? 'active' : ''}`}
+              onClick={() => setActiveTab('habit')}
+            >
+              {t.settingsTabHabit || 'Habit support'}
+            </button>
+            <button
+              id="settings-tab-privacy"
+              role="tab"
+              aria-selected={activeTab === 'privacy'}
+              aria-controls="settings-panel-privacy"
+              tabIndex={activeTab === 'privacy' ? 0 : -1}
+              className={`tab-btn ${activeTab === 'privacy' ? 'active' : ''}`}
+              onClick={() => setActiveTab('privacy')}
+            >
+              {t.settingsTabData || 'Privacy & data'}
+            </button>
+            <button
+              id="settings-tab-app"
+              role="tab"
+              aria-selected={activeTab === 'app'}
+              aria-controls="settings-panel-app"
+              tabIndex={activeTab === 'app' ? 0 : -1}
               className={`tab-btn ${activeTab === 'app' ? 'active' : ''}`}
               onClick={() => setActiveTab('app')}
             >
               {t.settingsTabApp || 'App'}
             </button>
-            <button
-              className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`}
-              onClick={() => setActiveTab('data')}
-            >
-              {t.settingsTabData || 'Data'}
-            </button>
           </div>
 
           <div className="settings-content">
-            {activeTab === 'detection' && (
-              <>
-                {/* Language Selection */}
+            {settingsNotice && (
+              <div className={`settings-notice ${settingsNotice.kind}`} role="status" aria-live="polite">
+                <span className="settings-notice-dot" aria-hidden="true" />
+                <span>{settingsNotice.message}</span>
+                <button
+                  type="button"
+                  className="settings-notice-close"
+                  onClick={() => setSettingsNotice(null)}
+                  aria-label="Dismiss message"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'setup' && (
+              <div
+                id="settings-panel-setup"
+                role="tabpanel"
+                aria-labelledby="settings-tab-setup"
+              >
                 <div className="settings-section">
                   <h4>{t.settingsLanguage}</h4>
                   <div className="language-grid">
@@ -285,6 +424,7 @@ export function SettingsPanel({
                       <button
                         key={lang}
                         className={`language-btn ${language === lang ? 'active' : ''}`}
+                        aria-pressed={language === lang}
                         onClick={() => setLanguage(lang)}
                       >
                         {languageNames[lang]}
@@ -293,6 +433,89 @@ export function SettingsPanel({
                   </div>
                 </div>
 
+                <div className="settings-section">
+                  <h4>{t.settingsCamera || 'Camera'}</h4>
+                  <p className="slider-hint">{t.settingsCameraHint || 'Select camera device to use'}</p>
+                  <select
+                    className="camera-select"
+                    aria-label={t.settingsCamera || 'Camera'}
+                    value={selectedCameraId || ''}
+                    onChange={(e) => onCameraChange?.(e.target.value || null)}
+                  >
+                    <option value="">{t.settingsCameraDefault || 'Default Camera'}</option>
+                    {cameraDevices.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="settings-section">
+                  <label className="toggle-label">
+                    <div>
+                      <span>{t.settingsHidePreview || 'Hide camera preview'}</span>
+                      <p className="toggle-hint">{t.settingsHidePreviewHint || 'Save resources by hiding the video feed'}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={hidePreview}
+                      onChange={(e) => onHidePreviewChange?.(e.target.checked)}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-switch" />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'detection' && (
+              <div
+                id="settings-panel-detection"
+                role="tabpanel"
+                aria-labelledby="settings-tab-detection"
+              >
+                <div className="settings-section">
+                  <h4>Detection preset</h4>
+                  <div className="preset-grid" role="group" aria-label="Detection presets">
+                    <button
+                      type="button"
+                      className={`preset-btn ${selectedDetectionPreset === 'gentle' ? 'selected' : ''}`}
+                      aria-pressed={selectedDetectionPreset === 'gentle'}
+                      onClick={() => applyDetectionPreset('gentle')}
+                    >
+                      <span>Gentle</span>
+                      <small>Slower reminders, lower sensitivity</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`preset-btn ${selectedDetectionPreset === 'balanced' ? 'selected' : ''}`}
+                      aria-pressed={selectedDetectionPreset === 'balanced'}
+                      onClick={() => applyDetectionPreset('balanced')}
+                    >
+                      <span>Balanced</span>
+                      <small>Default timing for everyday use</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`preset-btn ${selectedDetectionPreset === 'strict' ? 'selected' : ''}`}
+                      aria-pressed={selectedDetectionPreset === 'strict'}
+                      onClick={() => applyDetectionPreset('strict')}
+                    >
+                      <span>Strict</span>
+                      <small>Faster reminders, higher sensitivity</small>
+                    </button>
+                  </div>
+                  <p className="slider-hint">Choose a baseline. Fine tuning stays available under advanced controls.</p>
+                </div>
+
+                <details
+                  className="advanced-settings"
+                  open={isDetectionAdvancedOpen}
+                  onToggle={(event) => setIsDetectionAdvancedOpen(event.currentTarget.open)}
+                >
+                  <summary>Advanced detection</summary>
+                  <div className="advanced-settings-body">
                 {/* Sensitivity */}
                 <div className="settings-section">
                   <h4>{t.settingsSensitivity}</h4>
@@ -303,6 +526,7 @@ export function SettingsPanel({
                       max="1"
                       step="0.1"
                       value={localSensitivity}
+                      aria-label={t.settingsSensitivity}
                       onChange={(e) => {
                         const v = clampFloat(e.target.value, 0, 1, localSensitivity)
                         setLocalSensitivity(v)
@@ -325,6 +549,7 @@ export function SettingsPanel({
                       max="3"
                       step="0.1"
                       value={localTriggerTime}
+                      aria-label={t.settingsTriggerTime}
                       onChange={(e) => {
                         const v = clampFloat(e.target.value, 0.5, 3, localTriggerTime)
                         setLocalTriggerTime(v)
@@ -347,6 +572,7 @@ export function SettingsPanel({
                       max="10"
                       step="0.5"
                       value={localCooldownTime}
+                      aria-label={t.settingsCooldownTime}
                       onChange={(e) => {
                         const v = clampFloat(e.target.value, 1, 10, localCooldownTime)
                         setLocalCooldownTime(v)
@@ -427,11 +653,17 @@ export function SettingsPanel({
                     </div>
                   </div>
                 </div>
-              </>
+                  </div>
+                </details>
+              </div>
             )}
 
             {activeTab === 'habit' && habitSettings && onHabitSettingsChange && (
-              <>
+              <div
+                id="settings-panel-habit"
+                role="tabpanel"
+                aria-labelledby="settings-tab-habit"
+              >
                 {/* Daily Touch Goal */}
                 <div className="settings-section">
                   <h4>{t.settingsDailyGoal || 'Daily Touch Goal'}</h4>
@@ -442,6 +674,7 @@ export function SettingsPanel({
                       max="30"
                       step="1"
                       value={localDailyGoal}
+                      aria-label={t.settingsDailyGoal || 'Daily goal'}
                       onChange={(e) => {
                         const v = clampInt(e.target.value, 3, 30, localDailyGoal)
                         setLocalDailyGoal(v)
@@ -464,6 +697,7 @@ export function SettingsPanel({
                       max="15"
                       step="1"
                       value={localMedThreshold}
+                      aria-label={t.settingsMeditationThreshold || 'Meditation threshold'}
                       onChange={(e) => {
                         const v = clampInt(e.target.value, 3, 15, localMedThreshold)
                         setLocalMedThreshold(v)
@@ -489,11 +723,33 @@ export function SettingsPanel({
                     <span className="toggle-switch" />
                   </label>
                 </div>
-              </>
+              </div>
             )}
 
-            {activeTab === 'sound' && (
-              <>
+            {activeTab === 'alerts' && (
+              <div
+                id="settings-panel-alerts"
+                role="tabpanel"
+                aria-labelledby="settings-tab-alerts"
+              >
+                <div className="settings-section">
+                  <h4>{t.alertTimeoutSettingsTitle}</h4>
+                  <p className="section-desc">{t.alertTimeoutSettingsDesc}</p>
+                  <div className="timeout-duration-grid" role="group" aria-label={t.alertTimeoutDefaultDuration}>
+                    {ALERT_TIMEOUT_MINUTES.map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        className={`timeout-duration-btn ${alertTimeoutDefaultMinutes === minutes ? 'selected' : ''}`}
+                        aria-pressed={alertTimeoutDefaultMinutes === minutes}
+                        onClick={() => onAlertTimeoutDefaultChange(minutes)}
+                      >
+                        {minutes}{t.alertTimeoutMinutesSuffix}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="settings-section">
                   <h4>{t.settingsAlertSound}</h4>
                   <p className="section-desc">{t.settingsAlertSoundDesc}</p>
@@ -513,6 +769,8 @@ export function SettingsPanel({
                           <button
                             type="button"
                             className="sound-preview-btn"
+                            aria-label={`${t.settingsSoundPreview}: ${t[preset.labelKey as keyof typeof t] as string}`}
+                            title={t.settingsSoundPreview}
                             onClick={(e) => { e.preventDefault(); onPreviewSound(preset.id) }}
                           >
                             ▶ {t.settingsSoundPreview}
@@ -547,6 +805,8 @@ export function SettingsPanel({
                           <button
                             type="button"
                             className="sound-preview-btn"
+                            aria-label={`${t.settingsSoundPreview}: ${t[preset.labelKey as keyof typeof t] as string}`}
+                            title={t.settingsSoundPreview}
                             onClick={(e) => { e.preventDefault(); onPreviewSound(preset.id) }}
                           >
                             ▶ {t.settingsSoundPreview}
@@ -571,6 +831,8 @@ export function SettingsPanel({
                           <button
                             type="button"
                             className="sound-preview-btn"
+                            aria-label={`${t.settingsSoundPreview}: ${entry.originalName}`}
+                            title={t.settingsSoundPreview}
                             onClick={(e) => { e.preventDefault(); onPreviewSound(entry.id) }}
                           >
                             ▶ {t.settingsSoundPreview}
@@ -580,6 +842,7 @@ export function SettingsPanel({
                             className="sound-delete-btn"
                             onClick={(e) => { e.preventDefault(); void handleSoundDelete(entry.id) }}
                             title={t.settingsSoundDelete}
+                            aria-label={`${t.settingsSoundDelete}: ${entry.originalName}`}
                           >
                             ✕
                           </button>
@@ -609,52 +872,22 @@ export function SettingsPanel({
                       max="1"
                       step="0.05"
                       value={alertVolume}
+                      aria-label={t.settingsSoundVolume}
                       onChange={(e) => onAlertSoundChange({ alertVolume: clampFloat(e.target.value, 0, 1, alertVolume) })}
                       className="slider"
                     />
                     <span className="slider-value">{Math.round(alertVolume * 100)}%</span>
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
             {activeTab === 'app' && (
-              <>
-                {/* Camera Selection */}
-                <div className="settings-section">
-                  <h4>{t.settingsCamera || 'Camera'}</h4>
-                  <p className="slider-hint">{t.settingsCameraHint || 'Select camera device to use'}</p>
-                  <select
-                    className="camera-select"
-                    value={selectedCameraId || ''}
-                    onChange={(e) => onCameraChange?.(e.target.value || null)}
-                  >
-                    <option value="">{t.settingsCameraDefault || 'Default Camera'}</option>
-                    {cameraDevices.map((device) => (
-                      <option key={device.deviceId} value={device.deviceId}>
-                        {device.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Hide Camera Preview */}
-                <div className="settings-section">
-                  <label className="toggle-label">
-                    <div>
-                      <span>{t.settingsHidePreview || 'Hide camera preview'}</span>
-                      <p className="toggle-hint">{t.settingsHidePreviewHint || 'Save resources by hiding the video feed'}</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={hidePreview}
-                      onChange={(e) => onHidePreviewChange?.(e.target.checked)}
-                      className="toggle-input"
-                    />
-                    <span className="toggle-switch" />
-                  </label>
-                </div>
-
+              <div
+                id="settings-panel-app"
+                role="tabpanel"
+                aria-labelledby="settings-tab-app"
+              >
                 {/* Auto Start */}
                 <div className="settings-section">
                   <label className="toggle-label">
@@ -719,11 +952,15 @@ export function SettingsPanel({
                     </button>
                   </div>
                 )}
-              </>
+              </div>
             )}
 
-            {activeTab === 'data' && (
-              <>
+            {activeTab === 'privacy' && (
+              <div
+                id="settings-panel-privacy"
+                role="tabpanel"
+                aria-labelledby="settings-tab-privacy"
+              >
                 <div className="settings-section">
                   <h4>{t.settingsExportImport || 'Export / Import'}</h4>
                   <p className="section-desc">{t.settingsExportImportDesc || 'Backup or restore your statistics data'}</p>
@@ -753,16 +990,29 @@ export function SettingsPanel({
                     />
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
       <style>{`
         .settings-container {
           position: relative;
-          z-index: 1000;
+          z-index: var(--z-floating);
+        }
+
+        .settings-backdrop {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding: 56px 16px 16px;
+          background: rgba(5, 7, 12, 0.62);
+          z-index: var(--z-modal-backdrop);
+          animation: settingsBackdropIn var(--motion-standard) var(--motion-ease);
         }
 
         .settings-toggle {
@@ -775,9 +1025,11 @@ export function SettingsPanel({
           background: transparent;
           border: none;
           border-radius: 6px;
-          color: #888;
+          color: #94a3b8;
           cursor: pointer;
-          transition: all 0.15s;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease);
         }
 
         .settings-toggle:hover {
@@ -786,24 +1038,27 @@ export function SettingsPanel({
         }
 
         .settings-panel {
-          position: fixed;
-          top: 56px;
-          right: 12px;
-          width: 340px;
-          max-height: calc(100vh - 70px);
+          width: min(760px, calc(100vw - 32px));
+          max-height: calc(100vh - 80px);
+          max-height: calc(100dvh - 80px);
           overflow-y: auto;
-          background: #1e1e2a;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: #1b1c25;
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 8px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-          z-index: 1001;
+          box-shadow: 0 8px 8px rgba(0, 0, 0, 0.35);
+          z-index: var(--z-modal);
+          animation: settingsPanelIn var(--motion-standard) var(--motion-ease);
         }
 
         .settings-header {
+          position: sticky;
+          top: 0;
+          z-index: 2;
           display: flex;
           justify-content: space-between;
           align-items: center;
           padding: 14px 16px;
+          background: #1b1c25;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
@@ -817,19 +1072,25 @@ export function SettingsPanel({
         .close-btn {
           background: none;
           border: none;
-          color: #888;
+          color: #94a3b8;
           font-size: 24px;
           cursor: pointer;
           padding: 0;
           line-height: 1;
+          transition: color var(--motion-fast) var(--motion-ease);
         }
 
         .close-btn:hover {
-          color: #ff4444;
+          color: #fca5a5;
         }
 
         .settings-tabs {
-          display: flex;
+          position: sticky;
+          top: 49px;
+          z-index: 2;
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          background: #1b1c25;
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
@@ -838,10 +1099,13 @@ export function SettingsPanel({
           padding: 10px;
           background: none;
           border: none;
-          color: #888;
+          color: #94a3b8;
           font-size: 12px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            border-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease);
         }
 
         .tab-btn:hover {
@@ -850,12 +1114,73 @@ export function SettingsPanel({
         }
 
         .tab-btn.active {
-          color: #00ffff;
-          border-bottom: 2px solid #00ffff;
+          color: #7dd3fc;
+          border-bottom: 2px solid #7dd3fc;
+          background: rgba(125, 211, 252, 0.08);
         }
 
         .settings-content {
-          padding: 16px 20px;
+          padding: 18px 22px 22px;
+        }
+
+        .settings-notice {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          margin-bottom: 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(125, 211, 252, 0.22);
+          background: rgba(125, 211, 252, 0.08);
+          color: #dbeafe;
+          font-size: 12px;
+          animation: settingsNoticeIn var(--motion-standard) var(--motion-ease);
+        }
+
+        .settings-notice.success {
+          border-color: rgba(52, 211, 153, 0.24);
+          background: rgba(52, 211, 153, 0.1);
+          color: #dcfce7;
+        }
+
+        .settings-notice.error {
+          border-color: rgba(248, 113, 113, 0.28);
+          background: rgba(248, 113, 113, 0.12);
+          color: #fee2e2;
+        }
+
+        .settings-notice-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #7dd3fc;
+          flex: 0 0 auto;
+        }
+
+        .settings-notice.success .settings-notice-dot {
+          background: #34d399;
+        }
+
+        .settings-notice.error .settings-notice-dot {
+          background: #f87171;
+        }
+
+        .settings-notice-close {
+          margin-left: auto;
+          width: 24px;
+          height: 24px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          border-radius: 6px;
+          background: transparent;
+          color: inherit;
+          cursor: pointer;
+        }
+
+        .settings-notice-close:hover {
+          background: rgba(255, 255, 255, 0.08);
         }
 
         .settings-section {
@@ -870,13 +1195,13 @@ export function SettingsPanel({
           margin: 0 0 8px 0;
           font-size: 13px;
           color: #fff;
-          letter-spacing: 0.5px;
+          letter-spacing: 0;
         }
 
         .section-desc {
           margin: 0 0 12px 0;
           font-size: 11px;
-          color: #666;
+          color: #94a3b8;
         }
 
         .language-grid {
@@ -897,15 +1222,96 @@ export function SettingsPanel({
         }
 
         .language-btn:hover {
-          background: rgba(0, 255, 136, 0.1);
-          border-color: rgba(0, 255, 136, 0.3);
-          color: #00ff88;
+          background: rgba(125, 211, 252, 0.1);
+          border-color: rgba(125, 211, 252, 0.3);
+          color: #7dd3fc;
         }
 
         .language-btn.active {
-          background: rgba(0, 255, 136, 0.2);
-          border-color: #00ff88;
-          color: #00ff88;
+          background: rgba(125, 211, 252, 0.14);
+          border-color: #7dd3fc;
+          color: #bfdbfe;
+        }
+
+        .preset-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .timeout-duration-grid {
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .timeout-duration-btn {
+          min-height: 36px;
+          padding: 8px 10px;
+          background: rgba(255, 255, 255, 0.045);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 6px;
+          color: #cbd5e1;
+          font-size: 12px;
+          font-weight: 650;
+          cursor: pointer;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            border-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
+        }
+
+        .timeout-duration-btn:hover {
+          background: rgba(125, 211, 252, 0.08);
+          border-color: rgba(125, 211, 252, 0.28);
+          color: #e0f2fe;
+        }
+
+        .timeout-duration-btn.selected {
+          background: rgba(125, 211, 252, 0.14);
+          border-color: #7dd3fc;
+          color: #f8fafc;
+        }
+
+        .timeout-duration-btn:active {
+          transform: translateY(1px);
+        }
+
+        .preset-btn {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-height: 76px;
+          padding: 12px;
+          text-align: left;
+          background: rgba(255, 255, 255, 0.045);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: #e5e7eb;
+          cursor: pointer;
+        }
+
+        .preset-btn:hover {
+          background: rgba(125, 211, 252, 0.08);
+          border-color: rgba(125, 211, 252, 0.32);
+        }
+
+        .preset-btn.selected {
+          background: rgba(125, 211, 252, 0.14);
+          border-color: #7dd3fc;
+          color: #f8fafc;
+        }
+
+        .preset-btn span {
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .preset-btn small {
+          color: #94a3b8;
+          font-size: 11px;
+          line-height: 1.35;
         }
 
         .slider-container {
@@ -927,24 +1333,41 @@ export function SettingsPanel({
           -webkit-appearance: none;
           width: 18px;
           height: 18px;
-          background: #00ffff;
+          background: #7dd3fc;
           border-radius: 50%;
           cursor: pointer;
-          box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+          box-shadow: 0 0 0 4px rgba(125, 211, 252, 0.14);
         }
 
         .slider-value {
           min-width: 50px;
           text-align: right;
           font-size: 14px;
-          font-family: monospace;
-          color: #00ffff;
+          color: #7dd3fc;
         }
 
         .slider-hint {
           margin: 6px 0 0 0;
-          font-size: 10px;
-          color: #666;
+          font-size: 11px;
+          color: #94a3b8;
+        }
+
+        .advanced-settings {
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 0;
+        }
+
+        .advanced-settings summary {
+          cursor: pointer;
+          padding: 12px 14px;
+          color: #e5e7eb;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .advanced-settings-body {
+          padding: 4px 14px 16px;
         }
 
         .toggle-label {
@@ -952,6 +1375,7 @@ export function SettingsPanel({
           align-items: center;
           justify-content: space-between;
           cursor: pointer;
+          position: relative;
         }
 
         .toggle-label span:first-child {
@@ -960,7 +1384,13 @@ export function SettingsPanel({
         }
 
         .toggle-input {
-          display: none;
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          margin: -1px;
+          padding: 0;
+          opacity: 0;
+          overflow: hidden;
         }
 
         .toggle-switch {
@@ -979,18 +1409,22 @@ export function SettingsPanel({
           left: 2px;
           width: 20px;
           height: 20px;
-          background: #666;
+          background: #94a3b8;
           border-radius: 50%;
           transition: all 0.2s;
         }
 
         .toggle-input:checked + .toggle-switch {
-          background: rgba(0, 255, 136, 0.3);
+          background: rgba(125, 211, 252, 0.3);
         }
 
         .toggle-input:checked + .toggle-switch::after {
           left: 22px;
-          background: #00ff88;
+          background: #7dd3fc;
+        }
+
+        .toggle-input:focus-visible + .toggle-switch {
+          box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.25);
         }
 
         .data-buttons {
@@ -1012,25 +1446,25 @@ export function SettingsPanel({
         }
 
         .data-btn.export {
-          background: rgba(0, 255, 136, 0.1);
-          border: 1px solid rgba(0, 255, 136, 0.3);
-          color: #00ff88;
+          background: rgba(52, 211, 153, 0.1);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          color: #86efac;
         }
 
         .data-btn.export:hover {
-          background: rgba(0, 255, 136, 0.2);
-          border-color: #00ff88;
+          background: rgba(52, 211, 153, 0.16);
+          border-color: #34d399;
         }
 
         .data-btn.import {
-          background: rgba(0, 136, 255, 0.1);
-          border: 1px solid rgba(0, 136, 255, 0.3);
-          color: #0088ff;
+          background: rgba(125, 211, 252, 0.1);
+          border: 1px solid rgba(125, 211, 252, 0.3);
+          color: #7dd3fc;
         }
 
         .data-btn.import:hover {
-          background: rgba(0, 136, 255, 0.2);
-          border-color: #0088ff;
+          background: rgba(125, 211, 252, 0.16);
+          border-color: #7dd3fc;
         }
 
         .zone-category {
@@ -1040,9 +1474,9 @@ export function SettingsPanel({
         .zone-category h5 {
           margin: 0 0 8px 0;
           font-size: 11px;
-          color: #888;
+          color: #94a3b8;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0;
         }
 
         .zone-group {
@@ -1055,6 +1489,7 @@ export function SettingsPanel({
           display: flex;
           align-items: center;
           gap: 6px;
+          position: relative;
           padding: 6px 10px;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1065,13 +1500,17 @@ export function SettingsPanel({
         }
 
         .zone-checkbox:hover:not(:has(input:disabled)) {
-          background: rgba(0, 255, 255, 0.1);
-          border-color: rgba(0, 255, 255, 0.3);
+          background: rgba(125, 211, 252, 0.08);
+          border-color: rgba(125, 211, 252, 0.28);
         }
 
         .zone-checkbox:has(input:checked) {
-          background: rgba(0, 255, 136, 0.15);
-          border-color: rgba(0, 255, 136, 0.5);
+          background: rgba(125, 211, 252, 0.12);
+          border-color: rgba(125, 211, 252, 0.45);
+        }
+
+        .zone-checkbox:has(input:focus-visible) {
+          box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.2);
         }
 
         .zone-checkbox:has(input:disabled) {
@@ -1080,7 +1519,13 @@ export function SettingsPanel({
         }
 
         .zone-checkbox input {
-          display: none;
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          margin: -1px;
+          padding: 0;
+          opacity: 0;
+          overflow: hidden;
         }
 
         .zone-checkbox .zone-name {
@@ -1088,11 +1533,11 @@ export function SettingsPanel({
         }
 
         .zone-checkbox:has(input:checked) .zone-name {
-          color: #00ff88;
+          color: #bfdbfe;
         }
 
         .zone-checkbox .zone-desc {
-          color: #666;
+          color: #94a3b8;
           font-size: 10px;
           margin-left: 4px;
         }
@@ -1112,12 +1557,12 @@ export function SettingsPanel({
         }
 
         .camera-select:hover {
-          border-color: rgba(0, 255, 255, 0.4);
+          border-color: rgba(125, 211, 252, 0.4);
         }
 
         .camera-select:focus {
-          border-color: #00ffff;
-          box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+          border-color: #7dd3fc;
+          box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.18);
         }
 
         .camera-select option {
@@ -1146,7 +1591,7 @@ export function SettingsPanel({
 
         .toggle-hint {
           font-size: 10px;
-          color: #666;
+          color: #94a3b8;
           margin: 4px 0 0 0;
         }
 
@@ -1164,9 +1609,9 @@ export function SettingsPanel({
         }
 
         .reset-close-action-btn:hover {
-          background: rgba(0, 255, 255, 0.1);
-          border-color: rgba(0, 255, 255, 0.4);
-          color: #00ffff;
+          background: rgba(125, 211, 252, 0.08);
+          border-color: rgba(125, 211, 252, 0.35);
+          color: #7dd3fc;
         }
 
         .sound-list {
@@ -1188,18 +1633,18 @@ export function SettingsPanel({
         }
 
         .sound-row:hover {
-          background: rgba(0, 255, 255, 0.06);
-          border-color: rgba(0, 255, 255, 0.25);
+          background: rgba(125, 211, 252, 0.06);
+          border-color: rgba(125, 211, 252, 0.25);
         }
 
         .sound-row.selected {
-          background: rgba(0, 255, 136, 0.12);
-          border-color: rgba(0, 255, 136, 0.5);
+          background: rgba(52, 211, 153, 0.12);
+          border-color: rgba(52, 211, 153, 0.45);
         }
 
         .sound-row input[type="radio"] {
           margin: 0;
-          accent-color: #00ff88;
+          accent-color: #34d399;
         }
 
         .sound-label {
@@ -1209,51 +1654,95 @@ export function SettingsPanel({
         }
 
         .sound-row.selected .sound-label {
-          color: #00ff88;
+          color: #86efac;
         }
 
         .sound-preview-btn {
-          background: rgba(0, 255, 255, 0.1);
-          border: 1px solid rgba(0, 255, 255, 0.3);
-          color: #00ffff;
-          padding: 4px 10px;
-          border-radius: 4px;
-          font-size: 11px;
+          width: 32px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          background: rgba(125, 211, 252, 0.1);
+          border: 1px solid rgba(125, 211, 252, 0.3);
+          color: #7dd3fc;
+          padding: 0;
+          border-radius: 6px;
+          font-size: 0;
           cursor: pointer;
+        }
+
+        .sound-preview-btn::before {
+          content: '';
+          width: 0;
+          height: 0;
+          margin-left: 2px;
+          border-top: 5px solid transparent;
+          border-bottom: 5px solid transparent;
+          border-left: 7px solid currentColor;
         }
 
         .sound-preview-btn:hover {
-          background: rgba(0, 255, 255, 0.2);
+          background: rgba(125, 211, 252, 0.16);
         }
 
         .sound-delete-btn {
-          background: none;
-          border: none;
-          color: #ff4444;
-          font-size: 14px;
+          position: relative;
+          width: 32px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          background: rgba(248, 113, 113, 0.08);
+          border: 1px solid rgba(248, 113, 113, 0.16);
+          border-radius: 6px;
+          color: #fca5a5;
+          font-size: 0;
           cursor: pointer;
-          padding: 0 6px;
+          padding: 0;
+        }
+
+        .sound-delete-btn::before,
+        .sound-delete-btn::after {
+          content: '';
+          position: absolute;
+          width: 12px;
+          height: 2px;
+          border-radius: 999px;
+          background: currentColor;
+        }
+
+        .sound-delete-btn::before {
+          transform: rotate(45deg);
+        }
+
+        .sound-delete-btn::after {
+          transform: rotate(-45deg);
         }
 
         .sound-delete-btn:hover {
-          color: #ff7777;
+          background: rgba(248, 113, 113, 0.13);
+          border-color: rgba(248, 113, 113, 0.26);
+          color: #fecaca;
         }
 
         .sound-upload-btn {
           margin-top: 8px;
           width: 100%;
           padding: 10px;
-          background: rgba(0, 136, 255, 0.1);
-          border: 1px dashed rgba(0, 136, 255, 0.4);
-          color: #66bbff;
+          background: rgba(125, 211, 252, 0.1);
+          border: 1px dashed rgba(125, 211, 252, 0.4);
+          color: #7dd3fc;
           border-radius: 6px;
           cursor: pointer;
           font-size: 12px;
         }
 
         .sound-upload-btn:hover {
-          background: rgba(0, 136, 255, 0.2);
-          border-color: rgba(0, 136, 255, 0.7);
+          background: rgba(125, 211, 252, 0.16);
+          border-color: rgba(125, 211, 252, 0.7);
         }
 
         .sound-voice-header {
@@ -1268,12 +1757,96 @@ export function SettingsPanel({
           align-items: center;
           gap: 6px;
           font-size: 11px;
-          color: #888;
+          color: #94a3b8;
           cursor: pointer;
         }
 
         .all-languages-toggle input {
-          accent-color: #00ff88;
+          accent-color: #34d399;
+        }
+
+        @keyframes settingsBackdropIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes settingsPanelIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.985);
+            filter: blur(3px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes settingsNoticeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 680px) {
+          .settings-backdrop {
+            align-items: stretch;
+            padding: 8px;
+          }
+
+          .settings-panel {
+            width: 100%;
+            max-height: calc(100dvh - 16px);
+          }
+
+          .settings-tabs {
+            top: 49px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .tab-btn {
+            min-height: 42px;
+          }
+
+          .settings-content {
+            padding: 14px;
+          }
+
+          .preset-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .timeout-duration-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .data-buttons {
+            flex-direction: column;
+          }
+
+          .sound-row {
+            align-items: flex-start;
+            gap: 8px;
+          }
+
+          .sound-label {
+            min-width: 0;
+            overflow-wrap: anywhere;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .settings-backdrop,
+          .settings-panel,
+          .settings-notice {
+            animation: none;
+          }
         }
       `}</style>
     </div>

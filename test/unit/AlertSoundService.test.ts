@@ -5,14 +5,20 @@ vi.mock('../../src/utils/logger', () => ({
 }))
 
 const playSpy = vi.fn().mockResolvedValue(undefined)
+const pauseSpy = vi.fn()
 class FakeAudio {
   src: string
   volume = 1
+  currentTime = 0
   constructor(src: string) {
     this.src = src
   }
+  addEventListener() {}
   play() {
     return playSpy(this.src, this.volume)
+  }
+  pause() {
+    pauseSpy(this.src)
   }
 }
 vi.stubGlobal('Audio', FakeAudio)
@@ -29,6 +35,7 @@ function makeService(resolveCustom = vi.fn()) {
 describe('AlertSoundService', () => {
   beforeEach(() => {
     playSpy.mockClear()
+    pauseSpy.mockClear()
     playSpy.mockResolvedValue(undefined)
   })
 
@@ -80,5 +87,12 @@ describe('AlertSoundService', () => {
     })
     await svc.play('tone-chime', 0.5)
     expect(fallback).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops the current alert sound', async () => {
+    const svc = makeService()
+    await svc.play('tone-chime', 0.5)
+    svc.stop()
+    expect(pauseSpy).toHaveBeenCalledWith('/sounds/tone-chime.wav')
   })
 })

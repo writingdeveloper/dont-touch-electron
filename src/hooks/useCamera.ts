@@ -1,5 +1,9 @@
 import { useState, useCallback, useEffect } from 'react'
 
+import { STORAGE_KEYS } from '../constants/storage-keys'
+import { logger } from '../utils/logger'
+import { RecoveryIssue, classifyCameraError } from '../utils/recovery'
+
 interface VideoDevice {
   deviceId: string
   label: string
@@ -7,23 +11,20 @@ interface VideoDevice {
 
 interface UseCameraReturn {
   stream: MediaStream | null
-  error: string | null
+  error: RecoveryIssue | null
   devices: VideoDevice[]
   selectedDeviceId: string | null
-  startCamera: (deviceId?: string) => Promise<void>
+  startCamera: (deviceId?: string | null) => Promise<boolean>
   stopCamera: () => void
   setSelectedDeviceId: (deviceId: string | null) => void
   refreshDevices: () => Promise<void>
 }
 
-import { STORAGE_KEYS } from '../constants/storage-keys'
-import { logger } from '../utils/logger'
-
 const STORAGE_KEY = STORAGE_KEYS.CAMERA_DEVICE
 
 export function useCamera(): UseCameraReturn {
   const [stream, setStream] = useState<MediaStream | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<RecoveryIssue | null>(null)
   const [devices, setDevices] = useState<VideoDevice[]>([])
   const [selectedDeviceId, setSelectedDeviceIdState] = useState<string | null>(() => {
     try {
@@ -86,7 +87,7 @@ export function useCamera(): UseCameraReturn {
     }
   }, [])
 
-  const startCamera = useCallback(async (deviceId?: string) => {
+  const startCamera = useCallback(async (deviceId?: string | null) => {
     try {
       setError(null)
 
@@ -98,7 +99,7 @@ export function useCamera(): UseCameraReturn {
         return null
       })
 
-      const targetDeviceId = deviceId || selectedDeviceId
+      const targetDeviceId = deviceId === undefined ? selectedDeviceId : deviceId
 
       const constraints: MediaStreamConstraints = {
         video: {
@@ -115,10 +116,11 @@ export function useCamera(): UseCameraReturn {
 
       // Update device list after successful camera start
       refreshDevices()
+      return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to access camera'
-      setError(message)
+      setError(classifyCameraError(err))
       logger.error('Camera error:', err)
+      return false
     }
   }, [selectedDeviceId, refreshDevices])
 

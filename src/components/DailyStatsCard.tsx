@@ -12,9 +12,11 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
 
   const goalProgress = Math.min((stats.touchCount / settings.dailyTouchGoal) * 100, 100)
   const isOverGoal = stats.touchCount > settings.dailyTouchGoal
+  const remainingToGoal = Math.max(settings.dailyTouchGoal - stats.touchCount, 0)
+  const progressLabel = `${stats.touchCount} ${t.statsTodayTouches || 'touches'} / ${settings.dailyTouchGoal} ${t.statsGoal || 'goal'}`
   const lastTouchTime = stats.lastTouch
     ? new Date(stats.lastTouch).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '--:--'
+    : t.statsNever || 'Never'
 
   return (
     <div className="daily-stats-card">
@@ -22,8 +24,9 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
         <span className="stats-title">{t.statsTodayTouches || "Today's Touches"}</span>
         {progress.currentStreak > 0 && (
           <div className="streak-badge">
-            <span className="streak-icon">🔥</span>
+            <span className="streak-dot" aria-hidden="true" />
             <span className="streak-count">{progress.currentStreak}</span>
+            <span className="streak-label">{t.statsDays || 'days'}</span>
           </div>
         )}
       </div>
@@ -35,11 +38,25 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
         <span className="touch-goal">/ {settings.dailyTouchGoal}</span>
       </div>
 
-      <div className="progress-bar-container">
+      <div
+        className="progress-bar-container"
+        role="progressbar"
+        aria-label={progressLabel}
+        aria-valuemin={0}
+        aria-valuemax={settings.dailyTouchGoal}
+        aria-valuenow={Math.min(stats.touchCount, settings.dailyTouchGoal)}
+      >
         <div
           className={`progress-bar ${isOverGoal ? 'over-goal' : ''}`}
           style={{ width: `${goalProgress}%` }}
         />
+      </div>
+      <div className="goal-caption">
+        {isOverGoal
+          ? t.calendarBad || 'Over goal'
+          : remainingToGoal === 0
+            ? t.calendarGood || 'Goal met'
+            : `${remainingToGoal} ${t.meditationRemaining || 'remaining'}`}
       </div>
 
       <div className="stats-details">
@@ -69,33 +86,41 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
 
         .stats-title {
-          font-size: 10px;
-          color: #666;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          font-size: 12px;
+          color: #94a3b8;
+          font-weight: 600;
+          letter-spacing: 0;
         }
 
         .streak-badge {
           display: flex;
           align-items: center;
-          gap: 3px;
-          background: rgba(255, 136, 0, 0.15);
-          border-radius: 10px;
-          padding: 3px 8px;
+          gap: 5px;
+          background: rgba(52, 211, 153, 0.1);
+          border: 1px solid rgba(52, 211, 153, 0.18);
+          border-radius: 999px;
+          padding: 3px 7px;
           font-size: 11px;
         }
 
-        .streak-icon {
-          font-size: 12px;
+        .streak-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #34d399;
         }
 
         .streak-count {
-          color: #ff8800;
+          color: #bbf7d0;
           font-weight: 600;
+        }
+
+        .streak-label {
+          color: #94a3b8;
         }
 
         .touch-count-container {
@@ -106,46 +131,52 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
         }
 
         .touch-count {
-          font-size: 36px;
+          font-size: 30px;
           font-weight: 700;
           color: #4ade80;
-          font-family: 'Consolas', monospace;
           line-height: 1;
+          font-variant-numeric: tabular-nums;
         }
 
         .touch-count.over-goal {
-          color: #f87171;
+          color: #fbbf24;
         }
 
         .touch-goal {
           font-size: 14px;
-          color: #555;
-          font-family: 'Consolas', monospace;
+          color: #94a3b8;
+          font-variant-numeric: tabular-nums;
         }
 
         .progress-bar-container {
-          height: 4px;
+          height: 6px;
           background: rgba(255, 255, 255, 0.06);
-          border-radius: 2px;
+          border-radius: 999px;
           overflow: hidden;
-          margin-bottom: 10px;
+          margin-bottom: 6px;
         }
 
         .progress-bar {
           height: 100%;
-          background: linear-gradient(90deg, #4ade80, #22d3ee);
-          border-radius: 2px;
-          transition: width 0.3s ease;
+          background: #34d399;
+          border-radius: inherit;
         }
 
         .progress-bar.over-goal {
-          background: linear-gradient(90deg, #fbbf24, #f87171);
+          background: #f59e0b;
+        }
+
+        .goal-caption {
+          color: #94a3b8;
+          font-size: 11px;
+          line-height: 1.4;
+          margin-bottom: 10px;
         }
 
         .stats-details {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
         }
 
         .stat-item {
@@ -156,16 +187,16 @@ export function DailyStatsCard({ stats, progress, settings }: DailyStatsCardProp
         }
 
         .stat-label {
-          color: #666;
+          color: #94a3b8;
         }
 
         .stat-value {
-          color: #999;
-          font-family: 'Consolas', monospace;
+          color: #cbd5e1;
+          font-variant-numeric: tabular-nums;
         }
 
         .stat-value.meditation {
-          color: #a78bfa;
+          color: #7dd3fc;
         }
       `}</style>
     </div>

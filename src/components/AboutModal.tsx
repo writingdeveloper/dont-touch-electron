@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 interface AboutModalProps {
   onClose: () => void
@@ -24,6 +25,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
   const { t } = useLanguage()
   const currentYear = new Date().getFullYear()
   const [version, setVersion] = useState('...')
+  const aboutModalRef = useFocusTrap()
 
   // Update states
   const [checking, setChecking] = useState(false)
@@ -37,6 +39,15 @@ export function AboutModal({ onClose }: AboutModalProps) {
   useEffect(() => {
     window.appInfo?.getVersion().then(setVersion).catch(() => setVersion('1.0.0'))
   }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const openExternal = (url: string) => {
     window.ipcRenderer?.invoke('open-external', url)
@@ -211,11 +222,15 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="about-modal-title">
-      <div className="about-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="about-modal" ref={aboutModalRef} onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={onClose} aria-label="Close">×</button>
 
         <div className="about-header">
-          <span className="about-icon" aria-hidden="true">🛡️</span>
+          <span className="about-icon" aria-hidden="true">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M12 3l7 3v5c0 4.5-2.8 8.5-7 10-4.2-1.5-7-5.5-7-10V6l7-3z" />
+            </svg>
+          </span>
           <h2 id="about-modal-title">{t.appTitle}</h2>
           <span className="version">v{version}</span>
         </div>
@@ -228,7 +243,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
           </div>
 
           <p className="about-desc">
-            {t.aboutDescription || 'AI-powered face touch detection app to help overcome habits like trichotillomania and skin picking.'}
+            {t.aboutDescription || 'Local hand-near-face reminders for reducing face-touching habits.'}
           </p>
 
           <div className="about-section">
@@ -257,8 +272,8 @@ export function AboutModal({ onClose }: AboutModalProps) {
               {t.aboutPrivacyText || 'All video processing occurs locally on your device. No images, videos, or personal data are collected, stored, or transmitted to external servers.'}
             </p>
             <div className="privacy-badges">
-              <span className="privacy-badge">🔒 {t.aboutLocalOnly || 'Local Processing'}</span>
-              <span className="privacy-badge">🛡️ {t.aboutNoData || 'No Data Collection'}</span>
+              <span className="privacy-badge">{t.aboutLocalOnly || 'Local processing'}</span>
+              <span className="privacy-badge">{t.aboutNoData || 'No cloud video upload'}</span>
             </div>
             <p className="compliance-text">
               {t.aboutCompliance || 'Compliant with GDPR (EU), CCPA (California), PIPEDA (Canada), and international privacy regulations.'}
@@ -301,19 +316,19 @@ export function AboutModal({ onClose }: AboutModalProps) {
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 2000;
+            z-index: var(--z-modal-backdrop);
             backdrop-filter: blur(8px);
           }
 
           .about-modal {
-            background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid rgba(0, 255, 255, 0.15);
-            border-radius: 16px;
+            background: #1b1c25;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
             width: 400px;
             max-height: 85vh;
             overflow-y: auto;
             position: relative;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 8px 8px rgba(0, 0, 0, 0.35);
           }
 
           .close-btn {
@@ -322,7 +337,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
             right: 12px;
             background: none;
             border: none;
-            color: #666;
+            color: #94a3b8;
             font-size: 24px;
             cursor: pointer;
             width: 32px;
@@ -355,22 +370,19 @@ export function AboutModal({ onClose }: AboutModalProps) {
             margin: 0;
             font-size: 22px;
             font-weight: 700;
-            background: linear-gradient(90deg, #00ffff, #00ff88);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #f8fafc;
           }
 
           .version {
             display: inline-block;
             margin-top: 10px;
             padding: 5px 14px;
-            background: rgba(0, 255, 255, 0.1);
-            border: 1px solid rgba(0, 255, 255, 0.25);
+            background: rgba(125, 211, 252, 0.1);
+            border: 1px solid rgba(125, 211, 252, 0.25);
             border-radius: 14px;
             font-size: 12px;
             font-weight: 500;
-            color: #00ffff;
+            color: #7dd3fc;
           }
 
           .about-content {
@@ -394,8 +406,8 @@ export function AboutModal({ onClose }: AboutModalProps) {
             font-size: 11px;
             font-weight: 600;
             color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
+            text-transform: none;
+            letter-spacing: 0;
           }
 
           .about-section ul {
@@ -412,15 +424,15 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           /* Update Section Styles */
           .update-section {
-            background: rgba(0, 255, 255, 0.05);
-            border: 1px solid rgba(0, 255, 255, 0.15);
+            background: rgba(125, 211, 252, 0.06);
+            border: 1px solid rgba(125, 211, 252, 0.16);
             border-radius: 10px;
             padding: 14px;
             margin-bottom: 20px;
           }
 
           .update-section h4 {
-            color: #00ffff;
+            color: #7dd3fc;
             margin-bottom: 12px;
           }
 
@@ -440,13 +452,13 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           .update-btn.check {
             width: 100%;
-            background: rgba(0, 255, 255, 0.1);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            color: #00ffff;
+            background: rgba(125, 211, 252, 0.1);
+            border: 1px solid rgba(125, 211, 252, 0.3);
+            color: #7dd3fc;
           }
 
           .update-btn.check:hover:not(:disabled) {
-            background: rgba(0, 255, 255, 0.2);
+            background: rgba(125, 211, 252, 0.16);
           }
 
           .update-btn.check:disabled {
@@ -455,23 +467,23 @@ export function AboutModal({ onClose }: AboutModalProps) {
           }
 
           .update-btn.download {
-            background: rgba(0, 255, 136, 0.2);
-            border: 1px solid rgba(0, 255, 136, 0.4);
-            color: #00ff88;
+            background: rgba(52, 211, 153, 0.14);
+            border: 1px solid rgba(52, 211, 153, 0.35);
+            color: #86efac;
           }
 
           .update-btn.download:hover {
-            background: rgba(0, 255, 136, 0.3);
+            background: rgba(52, 211, 153, 0.2);
           }
 
           .update-btn.install {
-            background: rgba(0, 255, 136, 0.3);
-            border: 1px solid #00ff88;
-            color: #00ff88;
+            background: rgba(52, 211, 153, 0.18);
+            border: 1px solid #34d399;
+            color: #86efac;
           }
 
           .update-btn.install:hover {
-            background: rgba(0, 255, 136, 0.4);
+            background: rgba(52, 211, 153, 0.24);
           }
 
           .update-btn.later {
@@ -495,7 +507,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
             flex-direction: row;
             align-items: center;
             justify-content: center;
-            color: #00ff88;
+            color: #86efac;
             font-size: 13px;
             gap: 8px;
           }
@@ -516,7 +528,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           .update-status.ready .update-text {
             text-align: center;
-            color: #00ff88;
+            color: #86efac;
             font-size: 13px;
           }
 
@@ -551,8 +563,8 @@ export function AboutModal({ onClose }: AboutModalProps) {
           }
 
           .version-badge.new {
-            background: rgba(0, 255, 136, 0.2);
-            color: #00ff88;
+            background: rgba(52, 211, 153, 0.14);
+            color: #86efac;
           }
 
           .version-arrow {
@@ -569,22 +581,21 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #00ffff, #00ff88);
+            background: #7dd3fc;
             border-radius: 3px;
-            transition: width 0.3s ease;
           }
 
           .update-status.downloading .update-text {
             text-align: center;
-            color: #00ffff;
+            color: #7dd3fc;
             font-size: 12px;
           }
 
           .spinner {
             width: 14px;
             height: 14px;
-            border: 2px solid rgba(0, 255, 255, 0.2);
-            border-top-color: #00ffff;
+            border: 2px solid rgba(125, 211, 252, 0.2);
+            border-top-color: #7dd3fc;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
           }
@@ -610,14 +621,14 @@ export function AboutModal({ onClose }: AboutModalProps) {
           }
 
           .privacy-section {
-            background: rgba(0, 255, 136, 0.05);
-            border: 1px solid rgba(0, 255, 136, 0.15);
+            background: rgba(52, 211, 153, 0.06);
+            border: 1px solid rgba(52, 211, 153, 0.16);
             border-radius: 10px;
             padding: 14px;
           }
 
           .privacy-section h4 {
-            color: #00ff88;
+            color: #86efac;
             margin-bottom: 8px;
           }
 
@@ -637,11 +648,11 @@ export function AboutModal({ onClose }: AboutModalProps) {
 
           .privacy-badge {
             padding: 4px 10px;
-            background: rgba(0, 255, 136, 0.1);
+            background: rgba(52, 211, 153, 0.1);
             border-radius: 12px;
             font-size: 10px;
             font-weight: 500;
-            color: #00ff88;
+            color: #86efac;
           }
 
           .compliance-text {
