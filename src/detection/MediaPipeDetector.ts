@@ -9,6 +9,7 @@ import {
 import { DetectionResult, HandKeypoints, HeadRegion, Point, FaceLandmarks } from './types';
 import { MEDIAPIPE_URLS } from '../constants/mediapipe';
 import { logger } from '../utils/logger';
+import { HAND_VALIDATION, validateHandLandmarks } from './handValidation';
 
 // Hand landmark indices
 const HAND_LANDMARK = {
@@ -88,9 +89,9 @@ export class MediaPipeDetector {
           },
           runningMode: 'VIDEO',
           numHands: 2,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
+          minHandDetectionConfidence: HAND_VALIDATION.minHandConfidence,
+          minHandPresenceConfidence: HAND_VALIDATION.minHandConfidence,
+          minTrackingConfidence: HAND_VALIDATION.minHandConfidence,
         });
       };
 
@@ -215,16 +216,18 @@ export class MediaPipeDetector {
     if (handResults.landmarks && handResults.handednesses) {
       for (let i = 0; i < handResults.landmarks.length; i++) {
         const landmarks = handResults.landmarks[i];
-        const handedness = handResults.handednesses[i];
-        const confidence = handedness[0].score;
+        const handedness = handResults.handednesses[i]?.[0];
+        if (!handedness) continue;
 
-        // Basic confidence check only
-        if (confidence < 0.5) continue;
+        const confidence = handedness.score;
+
+        const validation = validateHandLandmarks(landmarks, confidence);
+        if (!validation.valid) continue;
 
         const points: Point[] = landmarks.map(l => ({
           x: l.x * width,
           y: l.y * height,
-          confidence: 1.0,
+          confidence: validation.pointConfidence,
         }));
 
         // Ensure we have enough landmarks for fingertip access
@@ -232,7 +235,7 @@ export class MediaPipeDetector {
 
         hands.push({
           landmarks: points,
-          handedness: handedness[0].categoryName as 'Left' | 'Right',
+          handedness: handedness.categoryName as 'Left' | 'Right',
           confidence,
           fingertips: {
             thumb: points[HAND_LANDMARK.THUMB_TIP],

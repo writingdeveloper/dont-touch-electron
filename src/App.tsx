@@ -84,6 +84,7 @@ function App() {
           rightRailCollapsed: Boolean(parsed.rightRailCollapsed),
           alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(parsed.alertTimeoutDefaultMinutes),
           cameraQuality: coerceCameraQuality(parsed.cameraQuality),
+          detectionDebugHud: Boolean(parsed.detectionDebugHud),
         }
       }
     } catch {
@@ -115,6 +116,7 @@ function App() {
       rightRailCollapsed: Boolean(merged.rightRailCollapsed),
       alertTimeoutDefaultMinutes: coerceAlertTimeoutMinutes(merged.alertTimeoutDefaultMinutes),
       cameraQuality: coerceCameraQuality(merged.cameraQuality),
+      detectionDebugHud: Boolean(merged.detectionDebugHud),
     }
     setAppSettings(updated)
     try {
@@ -536,6 +538,8 @@ function App() {
             onCameraChange={setSelectedCameraId}
             cameraQuality={appSettings.cameraQuality}
             onCameraQualityChange={(cameraQuality) => updateAppSettings({ cameraQuality })}
+            detectionDebugHud={appSettings.detectionDebugHud}
+            onDetectionDebugHudChange={(detectionDebugHud) => updateAppSettings({ detectionDebugHud })}
             hidePreview={appSettings.hidePreview}
             onHidePreviewChange={(hide) => updateAppSettings({ hidePreview: hide })}
             closeAction={appSettings.closeAction}
@@ -651,6 +655,10 @@ function App() {
             handsCount={handsCount}
             hidePreview={appSettings.hidePreview}
             cameraStreamInfo={cameraStreamInfo}
+            activeZone={activeZone}
+            detectionState={detectionState}
+            detectionProgress={detectionProgress}
+            showDebugDetails={appSettings.detectionDebugHud}
           />
 
           {/* Progress Bar (when detecting) */}

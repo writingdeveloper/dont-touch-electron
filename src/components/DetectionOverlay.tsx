@@ -1,3 +1,4 @@
+import { DetectionState, DetectionZone } from '../detection/types'
 import { CameraStreamInfo, formatCameraStreamInfo } from '../utils/cameraQuality'
 
 interface DetectionOverlayProps {
@@ -5,9 +6,22 @@ interface DetectionOverlayProps {
   handsCount: number
   isRunning: boolean
   cameraStreamInfo?: CameraStreamInfo | null
+  activeZone?: DetectionZone | null
+  detectionState?: DetectionState
+  detectionProgress?: number
+  showDebugDetails?: boolean
 }
 
-export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning, cameraStreamInfo = null }: DetectionOverlayProps) {
+export function DetectionOverlay({
+  faceLandmarksCount,
+  handsCount,
+  isRunning,
+  cameraStreamInfo = null,
+  activeZone = null,
+  detectionState = 'IDLE',
+  detectionProgress = 0,
+  showDebugDetails = false,
+}: DetectionOverlayProps) {
   if (!isRunning) return null
 
   return (
@@ -32,6 +46,23 @@ export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning, ca
             {formatCameraStreamInfo(cameraStreamInfo)}
           </span>
         </div>
+        {showDebugDetails && (
+          <>
+            <div className="info-divider" />
+            <div className="info-row">
+              <span className="info-label">Zone</span>
+              <span className="info-value">{activeZone || 'None'}</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">State</span>
+              <span className="info-value">{detectionState}</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">Progress</span>
+              <span className="info-value">{Math.round(detectionProgress * 100)}%</span>
+            </div>
+          </>
+        )}
       </div>
 
       <style>{`
@@ -65,6 +96,12 @@ export function DetectionOverlay({ faceLandmarksCount, handsCount, isRunning, ca
           justify-content: space-between;
           gap: 8px;
           line-height: 1.5;
+        }
+
+        .info-divider {
+          height: 1px;
+          margin: 6px 0;
+          background: rgba(148, 163, 184, 0.2);
         }
 
         .info-label {

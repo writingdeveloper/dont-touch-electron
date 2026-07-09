@@ -43,9 +43,11 @@ const ZONE_RADIUS: Record<DetectionZone, number> = {
 const MISSED_FRAME_GRACE_FRAMES = 2;
 const CLEAR_FRAME_GRACE_FRAMES = 2;
 const LAST_GOOD_FACE_FRAMES = 3;
-const MIN_TOUCH_SCORE = 0.22;
+const SPECIFIC_ZONE_MIN_TOUCH_SCORE = 0.22;
+const FULL_FACE_MIN_TOUCH_SCORE = 0.45;
+const NEAR_CONFIRMATION_REQUIRED_FRAMES = 2;
 
-const HAND_CONTACTS: Array<{ index: number; radiusScale: number }> = [
+const FULL_FACE_CONTACTS: Array<{ index: number; radiusScale: number }> = [
   { index: 4, radiusScale: 1.0 },
   { index: 8, radiusScale: 1.0 },
   { index: 12, radiusScale: 1.0 },
@@ -56,11 +58,11 @@ const HAND_CONTACTS: Array<{ index: number; radiusScale: number }> = [
   { index: 11, radiusScale: 0.82 },
   { index: 15, radiusScale: 0.82 },
   { index: 19, radiusScale: 0.82 },
+];
+
+const SPECIFIC_ZONE_CONTACTS: Array<{ index: number; radiusScale: number }> = [
+  ...FULL_FACE_CONTACTS,
   { index: 2, radiusScale: 0.72 },
-  { index: 6, radiusScale: 0.72 },
-  { index: 10, radiusScale: 0.72 },
-  { index: 14, radiusScale: 0.72 },
-  { index: 18, radiusScale: 0.72 },
   { index: 0, radiusScale: 0.5 },
   { index: 5, radiusScale: 0.62 },
   { index: 9, radiusScale: 0.62 },
@@ -82,6 +84,7 @@ export class ProximityAnalyzer {
   private lastFaceLandmarks: FaceLandmarks | null = null;
   private missingHeadFrames = 0;
   private missingFaceFrames = 0;
+  private consecutiveNearFrames = 0;
 
   private alertCallback: (() => void) | null = null;
   private stateCallback: ((state: DetectionState) => void) | null = null;
@@ -114,10 +117,12 @@ export class ProximityAnalyzer {
 
   update(hands: HandKeypoints[], head: HeadRegion | null, faceLandmarks?: FaceLandmarks | null): ProximityInfo {
     const now = Date.now();
+    const hasCurrentHead = Boolean(head);
     const stableHead = this.getStableHead(head);
     const stableFaceLandmarks = this.getStableFaceLandmarks(faceLandmarks ?? null);
     const rawTouch = this.checkZoneTouch(hands, stableHead, stableFaceLandmarks);
-    const { isNearHead, activeZone } = this.applyMissedFrameGrace(rawTouch);
+    const confirmedTouch = this.applyStartConfirmation(rawTouch, hasCurrentHead);
+    const { isNearHead, activeZone } = this.applyMissedFrameGrace(confirmedTouch);
 
     this.currentIsNearHead = isNearHead;
     this.currentActiveZone = activeZone;
@@ -240,7 +245,7 @@ export class ProximityAnalyzer {
       }
     }
 
-    if (bestScore >= MIN_TOUCH_SCORE && bestZone) {
+    if (bestScore >= SPECIFIC_ZONE_MIN_TOUCH_SCORE && bestZone) {
       return { isNearHead: true, activeZone: bestZone, signal: 'near' };
     }
 
@@ -342,14 +347,17 @@ export class ProximityAnalyzer {
     const radiusY = (head.height / 2) * radiusMultiplier;
 
     for (const hand of hands) {
-      const contactPoints = this.getHandContactPoints(hand);
+      const contactPoints = this.getHandContactPoints(hand, 'fullFace');
 
       for (const contact of contactPoints) {
         const dx = contact.point.x - head.center.x;
         const dy = contact.point.y - head.center.y;
         const normalizedDist = (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
+        const normalizedDistance = Math.sqrt(normalizedDist);
+        const distanceScore = Math.max(0, 1 - normalizedDistance / contact.radiusScale);
+        const score = distanceScore * 0.8 + contact.confidence * 0.2;
 
-        if (normalizedDist <= contact.radiusScale * contact.radiusScale && contact.confidence >= MIN_TOUCH_SCORE) {
+        if (normalizedDist <= contact.radiusScale * contact.radiusScale && score >= FULL_FACE_MIN_TOUCH_SCORE) {
           return true;
         }
       }
@@ -380,6 +388,28 @@ export class ProximityAnalyzer {
     return this.missingFaceFrames <= LAST_GOOD_FACE_FRAMES ? this.lastFaceLandmarks : null;
   }
 
+  private applyStartConfirmation(
+    touch: { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal },
+    hasCurrentHead: boolean
+  ): { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal } {
+    if (this.state !== 'IDLE' || this.requireHandRemoval) {
+      this.consecutiveNearFrames = 0;
+      return touch;
+    }
+
+    if (!touch.isNearHead || !hasCurrentHead) {
+      this.consecutiveNearFrames = 0;
+      return { isNearHead: false, activeZone: null, signal: touch.signal === 'near' ? 'missing' : touch.signal };
+    }
+
+    this.consecutiveNearFrames++;
+    if (this.consecutiveNearFrames >= NEAR_CONFIRMATION_REQUIRED_FRAMES) {
+      return touch;
+    }
+
+    return { isNearHead: false, activeZone: null, signal: touch.signal === 'near' ? 'missing' : touch.signal };
+  }
+
   private applyMissedFrameGrace(touch: { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal }): { isNearHead: boolean; activeZone: DetectionZone | null } {
     if (touch.isNearHead) {
       this.missedFrameCount = 0;
@@ -397,8 +427,9 @@ export class ProximityAnalyzer {
     return { isNearHead: false, activeZone: null };
   }
 
-  private getHandContactPoints(hand: HandKeypoints): ContactPoint[] {
+  private getHandContactPoints(hand: HandKeypoints, mode: 'fullFace' | 'specific' = 'specific'): ContactPoint[] {
     const points: ContactPoint[] = [];
+    const contacts = mode === 'fullFace' ? FULL_FACE_CONTACTS : SPECIFIC_ZONE_CONTACTS;
 
     const addPoint = (point: Point | undefined, radiusScale: number) => {
       if (!point) return;
@@ -409,20 +440,15 @@ export class ProximityAnalyzer {
       });
     };
 
-    if (hand.fingertips) {
-      addPoint(hand.fingertips.thumb, 1);
-      addPoint(hand.fingertips.index, 1);
-      addPoint(hand.fingertips.middle, 1);
-      addPoint(hand.fingertips.ring, 1);
-      addPoint(hand.fingertips.pinky, 1);
-    }
-
-    for (const contact of HAND_CONTACTS) {
+    for (const contact of contacts) {
       addPoint(hand.landmarks[contact.index], contact.radiusScale);
     }
 
-    addPoint(hand.wrist, 0.5);
-    return points.filter(contact => contact.confidence >= MIN_TOUCH_SCORE);
+    if (mode === 'specific') {
+      addPoint(hand.wrist, 0.5);
+    }
+
+    return points.filter(contact => contact.confidence >= SPECIFIC_ZONE_MIN_TOUCH_SCORE);
   }
 
   private scoreContact(contact: ContactPoint, target: ZoneTarget, radius: number): number {
@@ -471,6 +497,7 @@ export class ProximityAnalyzer {
     this.lastFaceLandmarks = null;
     this.missingHeadFrames = 0;
     this.missingFaceFrames = 0;
+    this.consecutiveNearFrames = 0;
     this.stateCallback?.('IDLE');
   }
 }

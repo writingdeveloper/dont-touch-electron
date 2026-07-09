@@ -28,10 +28,11 @@ type SettingsTab = 'setup' | 'detection' | 'alerts' | 'habit' | 'privacy' | 'app
 const SETTINGS_TAB_ORDER: SettingsTab[] = ['setup', 'detection', 'alerts', 'habit', 'privacy', 'app']
 type SettingsNotice = { kind: 'success' | 'error' | 'info'; message: string } | null
 
-const DETECTION_PRESETS: Record<'gentle' | 'balanced' | 'strict', Pick<DetectionConfig, 'sensitivity' | 'triggerTime' | 'cooldownTime'>> = {
-  gentle: { sensitivity: 0.35, triggerTime: 1.6, cooldownTime: 3.5 },
-  balanced: { sensitivity: 0.5, triggerTime: 1.0, cooldownTime: 2.0 },
-  strict: { sensitivity: 0.72, triggerTime: 0.7, cooldownTime: 1.5 },
+const DETECTION_PRESETS: Record<'conservative' | 'gentle' | 'balanced' | 'strict', Pick<DetectionConfig, 'sensitivity' | 'triggerTime' | 'cooldownTime'> & { label: string; description: string }> = {
+  conservative: { sensitivity: 0.28, triggerTime: 2.0, cooldownTime: 4.0, label: 'Conservative', description: 'Fewer false positives, slower reminders' },
+  gentle: { sensitivity: 0.35, triggerTime: 1.6, cooldownTime: 3.5, label: 'Gentle', description: 'Slower reminders, lower sensitivity' },
+  balanced: { sensitivity: 0.5, triggerTime: 1.0, cooldownTime: 2.0, label: 'Balanced', description: 'Default timing for everyday use' },
+  strict: { sensitivity: 0.72, triggerTime: 0.7, cooldownTime: 1.5, label: 'Strict', description: 'Faster reminders, higher sensitivity' },
 }
 
 interface DetectionConfig {
@@ -60,6 +61,8 @@ interface SettingsPanelProps {
   onCameraChange?: (deviceId: string | null) => void
   cameraQuality: CameraQuality
   onCameraQualityChange: (quality: CameraQuality) => void
+  detectionDebugHud: boolean
+  onDetectionDebugHudChange: (enabled: boolean) => void
   hidePreview?: boolean
   onHidePreviewChange?: (hide: boolean) => void
   closeAction?: 'ask' | 'quit' | 'tray'
@@ -85,6 +88,8 @@ export function SettingsPanel({
   onCameraChange,
   cameraQuality,
   onCameraQualityChange,
+  detectionDebugHud,
+  onDetectionDebugHudChange,
   hidePreview = false,
   onHidePreviewChange,
   closeAction = 'ask',
@@ -237,6 +242,7 @@ export function SettingsPanel({
         return {
           ...parsed,
           cameraQuality: coerceCameraQuality(parsed.cameraQuality),
+          detectionDebugHud: Boolean(parsed.detectionDebugHud),
         }
       }
     } catch {
@@ -253,6 +259,7 @@ export function SettingsPanel({
         setAppSettings({
           ...settings,
           cameraQuality: coerceCameraQuality(settings.cameraQuality),
+          detectionDebugHud: Boolean(settings.detectionDebugHud),
         })
       }
     }).catch(() => {
@@ -265,6 +272,7 @@ export function SettingsPanel({
     const updated = {
       ...merged,
       cameraQuality: coerceCameraQuality(merged.cameraQuality),
+      detectionDebugHud: Boolean(merged.detectionDebugHud),
     }
     setAppSettings(updated)
     try {
@@ -528,35 +536,39 @@ export function SettingsPanel({
                 <div className="settings-section">
                   <h4>Detection preset</h4>
                   <div className="preset-grid" role="group" aria-label="Detection presets">
-                    <button
-                      type="button"
-                      className={`preset-btn ${selectedDetectionPreset === 'gentle' ? 'selected' : ''}`}
-                      aria-pressed={selectedDetectionPreset === 'gentle'}
-                      onClick={() => applyDetectionPreset('gentle')}
-                    >
-                      <span>Gentle</span>
-                      <small>Slower reminders, lower sensitivity</small>
-                    </button>
-                    <button
-                      type="button"
-                      className={`preset-btn ${selectedDetectionPreset === 'balanced' ? 'selected' : ''}`}
-                      aria-pressed={selectedDetectionPreset === 'balanced'}
-                      onClick={() => applyDetectionPreset('balanced')}
-                    >
-                      <span>Balanced</span>
-                      <small>Default timing for everyday use</small>
-                    </button>
-                    <button
-                      type="button"
-                      className={`preset-btn ${selectedDetectionPreset === 'strict' ? 'selected' : ''}`}
-                      aria-pressed={selectedDetectionPreset === 'strict'}
-                      onClick={() => applyDetectionPreset('strict')}
-                    >
-                      <span>Strict</span>
-                      <small>Faster reminders, higher sensitivity</small>
-                    </button>
+                    {(Object.keys(DETECTION_PRESETS) as Array<keyof typeof DETECTION_PRESETS>).map((presetName) => {
+                      const preset = DETECTION_PRESETS[presetName]
+                      return (
+                        <button
+                          key={presetName}
+                          type="button"
+                          className={`preset-btn ${selectedDetectionPreset === presetName ? 'selected' : ''}`}
+                          aria-pressed={selectedDetectionPreset === presetName}
+                          onClick={() => applyDetectionPreset(presetName)}
+                        >
+                          <span>{preset.label}</span>
+                          <small>{preset.description}</small>
+                        </button>
+                      )
+                    })}
                   </div>
                   <p className="slider-hint">Choose a baseline. Fine tuning stays available under advanced controls.</p>
+                </div>
+
+                <div className="settings-section">
+                  <label className="toggle-label">
+                    <div>
+                      <span>Detection debug HUD</span>
+                      <p className="toggle-hint">Show active zone and state while tuning false positives</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={detectionDebugHud}
+                      onChange={(e) => onDetectionDebugHudChange(e.target.checked)}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-switch" />
+                  </label>
                 </div>
 
                 <details
@@ -1285,7 +1297,7 @@ export function SettingsPanel({
 
         .preset-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: 10px;
         }
 

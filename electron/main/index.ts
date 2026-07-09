@@ -20,6 +20,7 @@ interface AppSettings {
   rightRailCollapsed: boolean
   alertTimeoutDefaultMinutes: 5 | 10 | 15 | 30 | 45 | 60
   cameraQuality: 'balanced' | 'high' | 'maximum'
+  detectionDebugHud: boolean
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -33,6 +34,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   rightRailCollapsed: false,
   alertTimeoutDefaultMinutes: 15,
   cameraQuality: 'high',
+  detectionDebugHud: false,
 }
 
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
@@ -102,6 +104,7 @@ function coerceAppSettings(value: unknown): AppSettings {
     cameraQuality: isCameraQuality(parsed.cameraQuality)
       ? parsed.cameraQuality
       : DEFAULT_APP_SETTINGS.cameraQuality,
+    detectionDebugHud: Boolean(parsed.detectionDebugHud ?? DEFAULT_APP_SETTINGS.detectionDebugHud),
   }
 }
 

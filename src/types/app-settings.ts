@@ -22,6 +22,7 @@ export interface AppSettings {
   rightRailCollapsed: boolean
   alertTimeoutDefaultMinutes: AlertTimeoutMinutes
   cameraQuality: CameraQuality
+  detectionDebugHud: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -35,4 +36,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   rightRailCollapsed: false,
   alertTimeoutDefaultMinutes: 15,
   cameraQuality: 'high',
+  detectionDebugHud: false,
 }

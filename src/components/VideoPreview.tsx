@@ -1,6 +1,7 @@
 import { RefObject, useState, useEffect, useCallback } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { Language } from '../i18n/translations'
+import { DetectionState, DetectionZone } from '../detection/types'
 import { CameraStreamInfo } from '../utils/cameraQuality'
 import { DetectionOverlay } from './DetectionOverlay'
 
@@ -12,6 +13,10 @@ interface VideoPreviewProps {
   handsCount?: number
   hidePreview?: boolean
   cameraStreamInfo?: CameraStreamInfo | null
+  activeZone?: DetectionZone | null
+  detectionState?: DetectionState
+  detectionProgress?: number
+  showDebugDetails?: boolean
 }
 
 // Map language codes to locale codes
@@ -32,6 +37,10 @@ export function VideoPreview({
   handsCount = 0,
   hidePreview = false,
   cameraStreamInfo = null,
+  activeZone = null,
+  detectionState = 'IDLE',
+  detectionProgress = 0,
+  showDebugDetails = false,
 }: VideoPreviewProps) {
   const { t, language } = useLanguage()
   const [currentTime, setCurrentTime] = useState('')
@@ -111,6 +120,10 @@ export function VideoPreview({
             handsCount={handsCount}
             isRunning={isRunning}
             cameraStreamInfo={cameraStreamInfo}
+            activeZone={activeZone}
+            detectionState={detectionState}
+            detectionProgress={detectionProgress}
+            showDebugDetails={showDebugDetails}
           />
         </>
       )}
@@ -122,6 +135,10 @@ export function VideoPreview({
           handsCount={handsCount}
           isRunning={isRunning}
           cameraStreamInfo={cameraStreamInfo}
+          activeZone={activeZone}
+          detectionState={detectionState}
+          detectionProgress={detectionProgress}
+          showDebugDetails={showDebugDetails}
         />
       )}
 
