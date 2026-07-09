@@ -3,9 +3,20 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
+
+  --z-video-overlay: 2;
+  --z-video-hud: 3;
+  --z-floating: 20;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-splash: 60;
+  --motion-fast: 150ms;
+  --motion-standard: 200ms;
+  --motion-slow: 250ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
@@ -32,6 +43,7 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -50,9 +62,22 @@ button {
   font-family: inherit;
   cursor: pointer;
 }
-button:focus,
-button:focus-visible {
+
+:focus {
   outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid #7dd3fc;
+  outline-offset: 3px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[role='tab']:focus-visible {
+  box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.2);
 }
 
 code {
@@ -66,6 +91,16 @@ code {
   padding: 2em;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
 
 @media (prefers-color-scheme: light) {
   :root {

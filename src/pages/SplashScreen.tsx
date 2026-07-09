@@ -89,7 +89,23 @@ export function SplashScreen({ onComplete, minimumDuration = 6000 }: SplashScree
     <div className="splash-screen">
       <div className="splash-content">
         <div className="splash-logo">
-          <span className="splash-icon">🛡️</span>
+          <svg className="splash-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 3.4 5.5 6v5.2c0 4 2.7 7.7 6.5 9.4 3.8-1.7 6.5-5.4 6.5-9.4V6L12 3.4Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M9.2 12.1 11 13.9l4-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
           <h1 className="splash-title">{t.appTitle || "Don't Touch"}</h1>
         </div>
 

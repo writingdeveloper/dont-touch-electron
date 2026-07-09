@@ -8,13 +8,25 @@ export interface ProximityInfo {
 }
 
 interface Config {
-  triggerTime: number;      // Seconds to hold before alert
-  cooldownTime: number;     // Seconds after alert before can trigger again
-  sensitivity: number;      // 0-1, affects detection radius
-  enabledZones: DetectionZone[];  // Which zones to monitor
+  triggerTime: number;
+  cooldownTime: number;
+  sensitivity: number;
+  enabledZones: DetectionZone[];
 }
 
-// Zone radius multipliers (relative to face size)
+interface ContactPoint {
+  point: Point;
+  radiusScale: number;
+  confidence: number;
+}
+
+interface ZoneTarget {
+  point: Point;
+  radiusScale: number;
+}
+
+type TouchSignal = 'near' | 'far' | 'missing';
+
 const ZONE_RADIUS: Record<DetectionZone, number> = {
   scalp: 0.4,
   forehead: 0.25,
@@ -28,6 +40,36 @@ const ZONE_RADIUS: Record<DetectionZone, number> = {
   fullFace: 1.0,
 };
 
+const MISSED_FRAME_GRACE_FRAMES = 2;
+const CLEAR_FRAME_GRACE_FRAMES = 2;
+const LAST_GOOD_FACE_FRAMES = 3;
+const SPECIFIC_ZONE_MIN_TOUCH_SCORE = 0.22;
+const FULL_FACE_MIN_TOUCH_SCORE = 0.45;
+const NEAR_CONFIRMATION_REQUIRED_FRAMES = 2;
+
+const FULL_FACE_CONTACTS: Array<{ index: number; radiusScale: number }> = [
+  { index: 4, radiusScale: 1.0 },
+  { index: 8, radiusScale: 1.0 },
+  { index: 12, radiusScale: 1.0 },
+  { index: 16, radiusScale: 1.0 },
+  { index: 20, radiusScale: 1.0 },
+  { index: 3, radiusScale: 0.82 },
+  { index: 7, radiusScale: 0.82 },
+  { index: 11, radiusScale: 0.82 },
+  { index: 15, radiusScale: 0.82 },
+  { index: 19, radiusScale: 0.82 },
+];
+
+const SPECIFIC_ZONE_CONTACTS: Array<{ index: number; radiusScale: number }> = [
+  ...FULL_FACE_CONTACTS,
+  { index: 2, radiusScale: 0.72 },
+  { index: 0, radiusScale: 0.5 },
+  { index: 5, radiusScale: 0.62 },
+  { index: 9, radiusScale: 0.62 },
+  { index: 13, radiusScale: 0.62 },
+  { index: 17, radiusScale: 0.62 },
+];
+
 export class ProximityAnalyzer {
   private state: DetectionState = 'IDLE';
   private detectStartTime: number | null = null;
@@ -35,6 +77,14 @@ export class ProximityAnalyzer {
   private currentIsNearHead = false;
   private currentActiveZone: DetectionZone | null = null;
   private requireHandRemoval = false;
+  private missedFrameCount = 0;
+  private clearFrameCount = 0;
+  private lastActiveZone: DetectionZone | null = null;
+  private lastHead: HeadRegion | null = null;
+  private lastFaceLandmarks: FaceLandmarks | null = null;
+  private missingHeadFrames = 0;
+  private missingFaceFrames = 0;
+  private consecutiveNearFrames = 0;
 
   private alertCallback: (() => void) | null = null;
   private stateCallback: ((state: DetectionState) => void) | null = null;
@@ -65,28 +115,33 @@ export class ProximityAnalyzer {
     this.config = { ...this.config, ...config };
   }
 
-  /**
-   * Main update function - call this every frame with detection results
-   */
   update(hands: HandKeypoints[], head: HeadRegion | null, faceLandmarks?: FaceLandmarks | null): ProximityInfo {
     const now = Date.now();
-
-    // Check which zone (if any) a fingertip is touching
-    const { isNearHead, activeZone } = this.checkZoneTouch(hands, head, faceLandmarks);
+    const hasCurrentHead = Boolean(head);
+    const stableHead = this.getStableHead(head);
+    const stableFaceLandmarks = this.getStableFaceLandmarks(faceLandmarks ?? null);
+    const rawTouch = this.checkZoneTouch(hands, stableHead, stableFaceLandmarks);
+    const confirmedTouch = this.applyStartConfirmation(rawTouch, hasCurrentHead);
+    const { isNearHead, activeZone } = this.applyMissedFrameGrace(confirmedTouch);
 
     this.currentIsNearHead = isNearHead;
     this.currentActiveZone = activeZone;
 
     let progress = 0;
 
-    // After alert, wait until hand is fully removed before allowing re-detection
     if (this.requireHandRemoval) {
-      if (!isNearHead) {
+      if (rawTouch.isNearHead) {
+        this.clearFrameCount = 0;
+      } else {
+        this.clearFrameCount++;
+      }
+
+      if (rawTouch.signal === 'far' || this.clearFrameCount > CLEAR_FRAME_GRACE_FRAMES) {
         this.requireHandRemoval = false;
+        this.clearFrameCount = 0;
       }
     }
 
-    // Simple state machine
     switch (this.state) {
       case 'IDLE':
         if (isNearHead && !this.requireHandRemoval) {
@@ -97,16 +152,13 @@ export class ProximityAnalyzer {
 
       case 'DETECTING':
         if (!isNearHead) {
-          // Hand removed - go back to IDLE
           this.setState('IDLE');
           this.detectStartTime = null;
         } else if (this.detectStartTime) {
-          // Hand still near - check progress
           const elapsed = (now - this.detectStartTime) / 1000;
           progress = Math.min(elapsed / this.config.triggerTime, 1);
 
           if (progress >= 1) {
-            // Trigger alert!
             this.setState('ALERT');
             this.alertCallback?.();
             this.cooldownStartTime = now;
@@ -116,7 +168,6 @@ export class ProximityAnalyzer {
 
       case 'ALERT':
         progress = 1;
-        // Immediately transition to cooldown
         this.requireHandRemoval = true;
         this.setState('COOLDOWN');
         break;
@@ -146,121 +197,77 @@ export class ProximityAnalyzer {
     return info;
   }
 
-  /**
-   * Check if any fingertip is touching an enabled zone
-   */
   private checkZoneTouch(
     hands: HandKeypoints[],
     head: HeadRegion | null,
     faceLandmarks?: FaceLandmarks | null
-  ): { isNearHead: boolean; activeZone: DetectionZone | null } {
+  ): { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal } {
     if (!head || hands.length === 0) {
-      return { isNearHead: false, activeZone: null };
+      return { isNearHead: false, activeZone: null, signal: 'missing' };
     }
 
     const enabledZones = this.config.enabledZones;
 
-    // If fullFace is enabled, use simple ellipse detection
     if (enabledZones.includes('fullFace')) {
-      const isNear = this.checkFingertipInsideFace(hands, head);
-      return { isNearHead: isNear, activeZone: isNear ? 'fullFace' : null };
+      const isNear = this.checkContactInsideFace(hands, head);
+      return { isNearHead: isNear, activeZone: isNear ? 'fullFace' : null, signal: isNear ? 'near' : 'far' };
     }
 
-    // Otherwise, check specific zones
     if (!faceLandmarks) {
-      // Cannot detect specific zones without face landmarks
-      // Return false instead of falling back to full face
-      return { isNearHead: false, activeZone: null };
+      return { isNearHead: false, activeZone: null, signal: 'missing' };
     }
 
-    // Get zone center points
-    const zoneCenters = this.getZoneCenters(faceLandmarks, head);
+    const zoneTargets = this.getZoneTargets(faceLandmarks, head);
+    let bestScore = 0;
+    let bestZone: DetectionZone | null = null;
 
-    // Check each fingertip against each enabled zone
     for (const hand of hands) {
-      if (!hand.fingertips) continue;
+      const contactPoints = this.getHandContactPoints(hand);
 
-      const tips = [
-        hand.fingertips.thumb,
-        hand.fingertips.index,
-        hand.fingertips.middle,
-        hand.fingertips.ring,
-        hand.fingertips.pinky,
-      ];
-
-      for (const tip of tips) {
-        if (!tip) continue;
-
+      for (const contact of contactPoints) {
         for (const zone of enabledZones) {
           if (zone === 'fullFace') continue;
 
-          // Special handling for ears - check both left and right ear positions
-          if (zone === 'ears') {
-            const earPositions = this.getEarPositions(faceLandmarks, head);
-            const baseRadius = Math.min(head.width, head.height) * ZONE_RADIUS[zone];
-            const radius = baseRadius * (0.8 + this.config.sensitivity * 0.7);
+          const targets = zoneTargets[zone];
+          if (!targets?.length) continue;
 
-            for (const earPos of earPositions) {
-              const dx = tip.x - earPos.x;
-              const dy = tip.y - earPos.y;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-
-              if (distance <= radius) {
-                return { isNearHead: true, activeZone: zone };
-              }
-            }
-            continue;
-          }
-
-          const zoneCenter = zoneCenters[zone];
-          if (!zoneCenter) continue;
-
-          // Calculate zone radius based on face size and sensitivity
           const baseRadius = Math.min(head.width, head.height) * ZONE_RADIUS[zone];
           const radius = baseRadius * (0.8 + this.config.sensitivity * 0.7);
 
-          // Distance check
-          const dx = tip.x - zoneCenter.x;
-          const dy = tip.y - zoneCenter.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance <= radius) {
-            return { isNearHead: true, activeZone: zone };
+          for (const target of targets) {
+            const score = this.scoreContact(contact, target, radius);
+            if (score > bestScore) {
+              bestScore = score;
+              bestZone = zone;
+            }
           }
         }
       }
     }
 
-    return { isNearHead: false, activeZone: null };
+    if (bestScore >= SPECIFIC_ZONE_MIN_TOUCH_SCORE && bestZone) {
+      return { isNearHead: true, activeZone: bestZone, signal: 'near' };
+    }
+
+    return { isNearHead: false, activeZone: null, signal: 'far' };
   }
 
-  /**
-   * Get left and right ear positions for ears zone detection
-   */
-  private getEarPositions(faceLandmarks: FaceLandmarks, head: HeadRegion): Point[] {
+  private getEarPositions(faceLandmarks: FaceLandmarks, head: HeadRegion): ZoneTarget[] {
     const positions: Point[] = [];
 
-    if (head.leftEar) {
-      positions.push(head.leftEar);
-    }
-    if (head.rightEar) {
-      positions.push(head.rightEar);
-    }
+    if (head.leftEar) positions.push(head.leftEar);
+    if (head.rightEar) positions.push(head.rightEar);
 
-    // If no ear data from MediaPipe, estimate positions based on face dimensions
     if (positions.length === 0) {
       const eyeY = (faceLandmarks.leftEye.y + faceLandmarks.rightEye.y) / 2;
-      // Ears are on the sides of the face, approximately at eye level
       const earOffsetX = head.width * 0.55;
 
-      // Left ear (estimated)
       positions.push({
         x: head.center.x - earOffsetX,
         y: eyeY,
         confidence: 0.5,
       });
 
-      // Right ear (estimated)
       positions.push({
         x: head.center.x + earOffsetX,
         y: eyeY,
@@ -268,99 +275,193 @@ export class ProximityAnalyzer {
       });
     }
 
-    return positions;
+    return positions.map(point => ({ point, radiusScale: 1 }));
   }
 
-  /**
-   * Get center points for each detection zone based on face landmarks
-   */
-  private getZoneCenters(faceLandmarks: FaceLandmarks, head: HeadRegion): Partial<Record<DetectionZone, Point>> {
-    const centers: Partial<Record<DetectionZone, Point>> = {};
+  private getZoneTargets(faceLandmarks: FaceLandmarks, head: HeadRegion): Partial<Record<DetectionZone, ZoneTarget[]>> {
+    const targets: Partial<Record<DetectionZone, ZoneTarget[]>> = {};
+    const scalpY = faceLandmarks.forehead.y - head.height * 0.24;
 
-    // Scalp - above forehead
-    centers.scalp = {
-      x: faceLandmarks.forehead.x,
-      y: faceLandmarks.forehead.y - head.height * 0.2,
-      confidence: faceLandmarks.forehead.confidence,
-    };
+    targets.scalp = [
+      {
+        point: {
+          x: faceLandmarks.forehead.x,
+          y: scalpY,
+          confidence: faceLandmarks.forehead.confidence,
+        },
+        radiusScale: 0.95,
+      },
+      {
+        point: {
+          x: head.center.x - head.width * 0.28,
+          y: scalpY + head.height * 0.04,
+          confidence: faceLandmarks.forehead.confidence,
+        },
+        radiusScale: 0.82,
+      },
+      {
+        point: {
+          x: head.center.x + head.width * 0.28,
+          y: scalpY + head.height * 0.04,
+          confidence: faceLandmarks.forehead.confidence,
+        },
+        radiusScale: 0.82,
+      },
+    ];
 
-    // Forehead
-    centers.forehead = faceLandmarks.forehead;
+    targets.forehead = [{ point: faceLandmarks.forehead, radiusScale: 1 }];
+    targets.eyebrows = [
+      { point: faceLandmarks.leftEyebrow, radiusScale: 1 },
+      { point: faceLandmarks.rightEyebrow, radiusScale: 1 },
+    ];
+    targets.eyes = [
+      { point: faceLandmarks.leftEye, radiusScale: 1 },
+      { point: faceLandmarks.rightEye, radiusScale: 1 },
+    ];
+    targets.nose = [{ point: faceLandmarks.noseTip, radiusScale: 1 }];
+    targets.cheeks = [
+      { point: faceLandmarks.leftCheek, radiusScale: 1 },
+      { point: faceLandmarks.rightCheek, radiusScale: 1 },
+    ];
+    targets.mouth = [
+      { point: faceLandmarks.upperLip, radiusScale: 0.9 },
+      { point: faceLandmarks.lowerLip, radiusScale: 0.9 },
+      {
+        point: {
+          x: (faceLandmarks.upperLip.x + faceLandmarks.lowerLip.x) / 2,
+          y: (faceLandmarks.upperLip.y + faceLandmarks.lowerLip.y) / 2,
+          confidence: (faceLandmarks.upperLip.confidence + faceLandmarks.lowerLip.confidence) / 2,
+        },
+        radiusScale: 1,
+      },
+    ];
+    targets.chin = [{ point: faceLandmarks.chin, radiusScale: 1 }];
+    targets.ears = this.getEarPositions(faceLandmarks, head);
 
-    // Eyebrows - between forehead and eyes
-    centers.eyebrows = {
-      x: (faceLandmarks.leftEyebrow.x + faceLandmarks.rightEyebrow.x) / 2,
-      y: (faceLandmarks.leftEyebrow.y + faceLandmarks.rightEyebrow.y) / 2,
-      confidence: (faceLandmarks.leftEyebrow.confidence + faceLandmarks.rightEyebrow.confidence) / 2,
-    };
-
-    // Eyes
-    centers.eyes = {
-      x: (faceLandmarks.leftEye.x + faceLandmarks.rightEye.x) / 2,
-      y: (faceLandmarks.leftEye.y + faceLandmarks.rightEye.y) / 2,
-      confidence: (faceLandmarks.leftEye.confidence + faceLandmarks.rightEye.confidence) / 2,
-    };
-
-    // Nose
-    centers.nose = faceLandmarks.noseTip;
-
-    // Cheeks
-    centers.cheeks = {
-      x: (faceLandmarks.leftCheek.x + faceLandmarks.rightCheek.x) / 2,
-      y: (faceLandmarks.leftCheek.y + faceLandmarks.rightCheek.y) / 2,
-      confidence: (faceLandmarks.leftCheek.confidence + faceLandmarks.rightCheek.confidence) / 2,
-    };
-
-    // Mouth
-    centers.mouth = {
-      x: (faceLandmarks.upperLip.x + faceLandmarks.lowerLip.x) / 2,
-      y: (faceLandmarks.upperLip.y + faceLandmarks.lowerLip.y) / 2,
-      confidence: (faceLandmarks.upperLip.confidence + faceLandmarks.lowerLip.confidence) / 2,
-    };
-
-    // Chin
-    centers.chin = faceLandmarks.chin;
-
-    // Note: ears zone is handled separately in getEarPositions() for better accuracy
-
-    return centers;
+    return targets;
   }
 
-  /**
-   * Check if any fingertip is inside the face ellipse (for fullFace mode)
-   */
-  private checkFingertipInsideFace(hands: HandKeypoints[], head: HeadRegion): boolean {
-    // Sensitivity affects the detection radius
+  private checkContactInsideFace(hands: HandKeypoints[], head: HeadRegion): boolean {
     const radiusMultiplier = 0.8 + this.config.sensitivity * 0.7;
     const radiusX = (head.width / 2) * radiusMultiplier;
     const radiusY = (head.height / 2) * radiusMultiplier;
 
     for (const hand of hands) {
-      if (!hand.fingertips) continue;
+      const contactPoints = this.getHandContactPoints(hand, 'fullFace');
 
-      const tips = [
-        hand.fingertips.thumb,
-        hand.fingertips.index,
-        hand.fingertips.middle,
-        hand.fingertips.ring,
-        hand.fingertips.pinky,
-      ];
-
-      for (const tip of tips) {
-        if (!tip) continue;
-
-        // Ellipse equation: (x-h)²/a² + (y-k)²/b² <= 1 means inside
-        const dx = tip.x - head.center.x;
-        const dy = tip.y - head.center.y;
+      for (const contact of contactPoints) {
+        const dx = contact.point.x - head.center.x;
+        const dy = contact.point.y - head.center.y;
         const normalizedDist = (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
+        const normalizedDistance = Math.sqrt(normalizedDist);
+        const distanceScore = Math.max(0, 1 - normalizedDistance / contact.radiusScale);
+        const score = distanceScore * 0.8 + contact.confidence * 0.2;
 
-        if (normalizedDist <= 1) {
+        if (normalizedDist <= contact.radiusScale * contact.radiusScale && score >= FULL_FACE_MIN_TOUCH_SCORE) {
           return true;
         }
       }
     }
 
     return false;
+  }
+
+  private getStableHead(head: HeadRegion | null): HeadRegion | null {
+    if (head) {
+      this.lastHead = head;
+      this.missingHeadFrames = 0;
+      return head;
+    }
+
+    this.missingHeadFrames++;
+    return this.missingHeadFrames <= LAST_GOOD_FACE_FRAMES ? this.lastHead : null;
+  }
+
+  private getStableFaceLandmarks(faceLandmarks: FaceLandmarks | null): FaceLandmarks | null {
+    if (faceLandmarks) {
+      this.lastFaceLandmarks = faceLandmarks;
+      this.missingFaceFrames = 0;
+      return faceLandmarks;
+    }
+
+    this.missingFaceFrames++;
+    return this.missingFaceFrames <= LAST_GOOD_FACE_FRAMES ? this.lastFaceLandmarks : null;
+  }
+
+  private applyStartConfirmation(
+    touch: { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal },
+    hasCurrentHead: boolean
+  ): { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal } {
+    if (this.state !== 'IDLE' || this.requireHandRemoval) {
+      this.consecutiveNearFrames = 0;
+      return touch;
+    }
+
+    if (!touch.isNearHead || !hasCurrentHead) {
+      this.consecutiveNearFrames = 0;
+      return { isNearHead: false, activeZone: null, signal: touch.signal === 'near' ? 'missing' : touch.signal };
+    }
+
+    this.consecutiveNearFrames++;
+    if (this.consecutiveNearFrames >= NEAR_CONFIRMATION_REQUIRED_FRAMES) {
+      return touch;
+    }
+
+    return { isNearHead: false, activeZone: null, signal: touch.signal === 'near' ? 'missing' : touch.signal };
+  }
+
+  private applyMissedFrameGrace(touch: { isNearHead: boolean; activeZone: DetectionZone | null; signal: TouchSignal }): { isNearHead: boolean; activeZone: DetectionZone | null } {
+    if (touch.isNearHead) {
+      this.missedFrameCount = 0;
+      this.lastActiveZone = touch.activeZone;
+      return { isNearHead: true, activeZone: touch.activeZone };
+    }
+
+    if (this.state === 'DETECTING' && touch.signal === 'missing' && this.missedFrameCount < MISSED_FRAME_GRACE_FRAMES) {
+      this.missedFrameCount++;
+      return { isNearHead: true, activeZone: this.lastActiveZone };
+    }
+
+    this.missedFrameCount = 0;
+    this.lastActiveZone = null;
+    return { isNearHead: false, activeZone: null };
+  }
+
+  private getHandContactPoints(hand: HandKeypoints, mode: 'fullFace' | 'specific' = 'specific'): ContactPoint[] {
+    const points: ContactPoint[] = [];
+    const contacts = mode === 'fullFace' ? FULL_FACE_CONTACTS : SPECIFIC_ZONE_CONTACTS;
+
+    const addPoint = (point: Point | undefined, radiusScale: number) => {
+      if (!point) return;
+      points.push({
+        point,
+        radiusScale,
+        confidence: Math.min(hand.confidence || 0, point.confidence ?? 1),
+      });
+    };
+
+    for (const contact of contacts) {
+      addPoint(hand.landmarks[contact.index], contact.radiusScale);
+    }
+
+    if (mode === 'specific') {
+      addPoint(hand.wrist, 0.5);
+    }
+
+    return points.filter(contact => contact.confidence >= SPECIFIC_ZONE_MIN_TOUCH_SCORE);
+  }
+
+  private scoreContact(contact: ContactPoint, target: ZoneTarget, radius: number): number {
+    const adjustedRadius = radius * contact.radiusScale * target.radiusScale;
+    const dx = contact.point.x - target.point.x;
+    const dy = contact.point.y - target.point.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > adjustedRadius) return 0;
+
+    const distanceScore = 1 - distance / adjustedRadius;
+    const confidence = Math.min(contact.confidence, target.point.confidence ?? 1);
+    return distanceScore * 0.8 + confidence * 0.2;
   }
 
   private setState(newState: DetectionState): void {
@@ -389,6 +490,14 @@ export class ProximityAnalyzer {
     this.currentIsNearHead = false;
     this.currentActiveZone = null;
     this.requireHandRemoval = false;
+    this.missedFrameCount = 0;
+    this.clearFrameCount = 0;
+    this.lastActiveZone = null;
+    this.lastHead = null;
+    this.lastFaceLandmarks = null;
+    this.missingHeadFrames = 0;
+    this.missingFaceFrames = 0;
+    this.consecutiveNearFrames = 0;
     this.stateCallback?.('IDLE');
   }
 }

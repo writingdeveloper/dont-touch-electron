@@ -1,35 +1,92 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProximityAnalyzer } from '../../src/detection/ProximityAnalyzer'
-import { HandKeypoints, HeadRegion, Point } from '../../src/detection/types'
+import { FaceLandmarks, HandKeypoints, HeadRegion, Point } from '../../src/detection/types'
 
-function makePoint(x: number, y: number): Point {
-  return { x, y, confidence: 1.0 }
+function makePoint(x: number, y: number, confidence = 1.0): Point {
+  return { x, y, confidence }
 }
 
 function makeHead(cx: number, cy: number, w: number, h: number): HeadRegion {
   return {
     nose: makePoint(cx, cy),
+    leftEar: makePoint(cx - w * 0.55, cy - h * 0.08),
+    rightEar: makePoint(cx + w * 0.55, cy - h * 0.08),
     center: makePoint(cx, cy),
     width: w,
     height: h,
   }
 }
 
-function makeHand(tipX: number, tipY: number): HandKeypoints {
-  const tip = makePoint(tipX, tipY)
+function makeFaceLandmarks(): FaceLandmarks {
   return {
-    landmarks: Array(21).fill(tip),
-    handedness: 'Right',
-    confidence: 0.9,
-    fingertips: {
-      thumb: tip,
-      index: tip,
-      middle: tip,
-      ring: tip,
-      pinky: tip,
-    },
-    wrist: makePoint(tipX, tipY + 100),
+    forehead: makePoint(200, 120),
+    leftEyebrow: makePoint(140, 150),
+    rightEyebrow: makePoint(260, 150),
+    leftEye: makePoint(135, 180),
+    rightEye: makePoint(265, 180),
+    noseTip: makePoint(200, 215),
+    noseBridge: makePoint(200, 175),
+    leftCheek: makePoint(135, 235),
+    rightCheek: makePoint(265, 235),
+    upperLip: makePoint(200, 260),
+    lowerLip: makePoint(200, 278),
+    chin: makePoint(200, 330),
+    all: Array.from({ length: 468 }, () => makePoint(200, 200)),
   }
+}
+
+function makeHand(tipX: number, tipY: number, confidence = 0.9): HandKeypoints {
+  const far = makePoint(600, 600)
+  const tip = makePoint(tipX, tipY)
+  const landmarks = Array.from({ length: 21 }, () => far)
+
+  for (const index of [3, 4, 7, 8, 11, 12, 15, 16, 19, 20]) {
+    landmarks[index] = tip
+  }
+
+  return {
+    landmarks,
+    handedness: 'Right',
+    confidence,
+    fingertips: {
+      thumb: landmarks[4],
+      index: landmarks[8],
+      middle: landmarks[12],
+      ring: landmarks[16],
+      pinky: landmarks[20],
+    },
+    wrist: landmarks[0],
+  }
+}
+
+function makeHandWithLandmark(index: number, point: Point, confidence = 0.9): HandKeypoints {
+  const far = makePoint(600, 600)
+  const landmarks = Array.from({ length: 21 }, () => far)
+  landmarks[index] = point
+
+  return {
+    landmarks,
+    handedness: 'Right',
+    confidence,
+    fingertips: {
+      thumb: far,
+      index: far,
+      middle: far,
+      ring: far,
+      pinky: far,
+    },
+    wrist: landmarks[0],
+  }
+}
+
+function confirmNear(
+  analyzer: ProximityAnalyzer,
+  hands: HandKeypoints[],
+  head: HeadRegion,
+  faceLandmarks?: FaceLandmarks
+) {
+  analyzer.update(hands, head, faceLandmarks)
+  return analyzer.update(hands, head, faceLandmarks)
 }
 
 describe('ProximityAnalyzer', () => {
@@ -45,153 +102,155 @@ describe('ProximityAnalyzer', () => {
     })
   })
 
-  it('should start in IDLE state', () => {
+  it('starts in IDLE state', () => {
     expect(analyzer.getState()).toBe('IDLE')
     expect(analyzer.isHandNearHead()).toBe(false)
   })
 
-  it('should detect hand near head (IDLE → DETECTING)', () => {
+  it('requires consecutive near frames before DETECTING', () => {
     const head = makeHead(200, 200, 150, 200)
-    const hand = makeHand(200, 200) // directly on face
+    const hand = makeHand(200, 200)
 
-    const info = analyzer.update([hand], head)
-    expect(info.isNearHead).toBe(true)
-    expect(info.state).toBe('DETECTING')
+    const first = analyzer.update([hand], head)
+    expect(first.isNearHead).toBe(false)
+    expect(first.state).toBe('IDLE')
+
+    const second = analyzer.update([hand], head)
+    expect(second.isNearHead).toBe(true)
+    expect(second.state).toBe('DETECTING')
   })
 
-  it('should return to IDLE when hand removed during DETECTING', () => {
+  it('does not start from a one-frame spike or near/far/near sequence', () => {
     const head = makeHead(200, 200, 150, 200)
     const handNear = makeHand(200, 200)
-    const handFar = makeHand(600, 600) // far away
+    const handFar = makeHand(600, 600)
 
-    analyzer.update([handNear], head)
-    expect(analyzer.getState()).toBe('DETECTING')
+    expect(analyzer.update([handNear], head).state).toBe('IDLE')
+    expect(analyzer.update([handFar], head).state).toBe('IDLE')
+    expect(analyzer.update([handNear], head).state).toBe('IDLE')
+  })
+
+  it('does not start a new detection from stale face data', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const hand = makeHand(200, 200)
+
+    analyzer.update([], head)
+    expect(analyzer.update([hand], null).state).toBe('IDLE')
+    expect(analyzer.update([hand], null).state).toBe('IDLE')
+  })
+
+  it('returns to IDLE when hand is clearly removed during DETECTING', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const handNear = makeHand(200, 200)
+    const handFar = makeHand(600, 600)
+
+    expect(confirmNear(analyzer, [handNear], head).state).toBe('DETECTING')
 
     const info = analyzer.update([handFar], head)
     expect(info.state).toBe('IDLE')
     expect(info.isNearHead).toBe(false)
   })
 
-  it('should trigger alert after triggerTime (DETECTING → ALERT → COOLDOWN)', () => {
+  it('triggers alert after triggerTime', () => {
     const alertCb = vi.fn()
     analyzer.setAlertCallback(alertCb)
 
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
 
-    // Start detecting
     vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head)
-    expect(analyzer.getState()).toBe('DETECTING')
+    expect(confirmNear(analyzer, [hand], head).state).toBe('DETECTING')
 
-    // Advance time past triggerTime (1 second)
     vi.setSystemTime(new Date(2100))
     analyzer.update([hand], head)
     expect(alertCb).toHaveBeenCalledTimes(1)
-    // After this update, state is ALERT (transition to COOLDOWN on next update)
     expect(analyzer.getState()).toBe('ALERT')
 
-    // Next update transitions ALERT → COOLDOWN
     analyzer.update([hand], head)
     expect(analyzer.getState()).toBe('COOLDOWN')
   })
 
-  it('should return to IDLE after cooldown period', () => {
+  it('returns to IDLE after cooldown period', () => {
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
     const handFar = makeHand(600, 600)
 
-    // Trigger alert
     vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head) // IDLE → DETECTING
+    confirmNear(analyzer, [hand], head)
 
     vi.setSystemTime(new Date(2100))
-    analyzer.update([hand], head) // DETECTING → ALERT
-    analyzer.update([hand], head) // ALERT → COOLDOWN
+    analyzer.update([hand], head)
+    analyzer.update([hand], head)
     expect(analyzer.getState()).toBe('COOLDOWN')
 
-    // Now in COOLDOWN, advance past cooldownTime (2 seconds from cooldownStartTime=2100)
     vi.setSystemTime(new Date(4200))
     analyzer.update([handFar], head)
     expect(analyzer.getState()).toBe('IDLE')
   })
 
-  it('should report progress during DETECTING', () => {
+  it('reports progress during DETECTING', () => {
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
 
     vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head)
+    confirmNear(analyzer, [hand], head)
 
-    vi.setSystemTime(new Date(1500)) // 0.5 seconds = 50% progress
+    vi.setSystemTime(new Date(1500))
     const info = analyzer.update([hand], head)
     expect(info.progress).toBeCloseTo(0.5, 1)
   })
 
-  it('should require hand removal after alert', () => {
+  it('requires hand removal after alert before starting again', () => {
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
     const handFar = makeHand(600, 600)
 
-    // Trigger alert
     vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head) // IDLE → DETECTING
+    confirmNear(analyzer, [hand], head)
     vi.setSystemTime(new Date(2100))
-    analyzer.update([hand], head) // DETECTING → ALERT
-    analyzer.update([hand], head) // ALERT → COOLDOWN
+    analyzer.update([hand], head)
+    analyzer.update([hand], head)
 
-    // Wait for cooldown to end
     vi.setSystemTime(new Date(4200))
-    analyzer.update([hand], head) // COOLDOWN → IDLE (but requireHandRemoval = true)
+    analyzer.update([hand], head)
 
-    // Hand still there, should not trigger DETECTING due to requireHandRemoval
     vi.setSystemTime(new Date(4300))
-    const info = analyzer.update([hand], head)
-    expect(info.state).toBe('IDLE')
+    expect(analyzer.update([hand], head).state).toBe('IDLE')
 
-    // Remove hand, then bring it back
     vi.setSystemTime(new Date(4400))
-    analyzer.update([handFar], head) // hand removed → clears requireHandRemoval
+    analyzer.update([handFar], head)
 
     vi.setSystemTime(new Date(4500))
-    const info2 = analyzer.update([hand], head) // hand back — should start detecting
-    expect(info2.state).toBe('DETECTING')
+    expect(analyzer.update([hand], head).state).toBe('IDLE')
+    expect(analyzer.update([hand], head).state).toBe('DETECTING')
   })
 
-  it('should not detect when no hands present', () => {
+  it('does not detect when no hands or no head are present', () => {
     const head = makeHead(200, 200, 150, 200)
-    const info = analyzer.update([], head)
-    expect(info.isNearHead).toBe(false)
-    expect(info.state).toBe('IDLE')
-  })
-
-  it('should not detect when no head present', () => {
     const hand = makeHand(200, 200)
-    const info = analyzer.update([hand], null)
-    expect(info.isNearHead).toBe(false)
-    expect(info.state).toBe('IDLE')
+
+    expect(analyzer.update([], head).isNearHead).toBe(false)
+    expect(analyzer.update([hand], null).isNearHead).toBe(false)
   })
 
-  it('should not detect hand far from face', () => {
+  it('does not detect hand far from face', () => {
     const head = makeHead(200, 200, 150, 200)
-    const hand = makeHand(600, 600) // far away
-    const info = analyzer.update([hand], head)
-    expect(info.isNearHead).toBe(false)
+    const hand = makeHand(600, 600)
+    expect(analyzer.update([hand], head).isNearHead).toBe(false)
   })
 
-  it('should call state callback on transitions', () => {
+  it('calls state callback on confirmed transitions', () => {
     const stateCb = vi.fn()
     analyzer.setStateCallback(stateCb)
 
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
 
-    vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head)
+    confirmNear(analyzer, [hand], head)
     expect(stateCb).toHaveBeenCalledWith('DETECTING')
   })
 
-  it('should call proximity callback each update', () => {
+  it('calls proximity callback each update', () => {
     const proxCb = vi.fn()
     analyzer.setProximityCallback(proxCb)
 
@@ -204,12 +263,11 @@ describe('ProximityAnalyzer', () => {
     }))
   })
 
-  it('reset should return to IDLE', () => {
+  it('reset returns to IDLE', () => {
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
 
-    vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head)
+    confirmNear(analyzer, [hand], head)
     expect(analyzer.getState()).toBe('DETECTING')
 
     analyzer.reset()
@@ -218,39 +276,108 @@ describe('ProximityAnalyzer', () => {
     expect(analyzer.getActiveZone()).toBeNull()
   })
 
-  it('updateConfig should change behavior', () => {
+  it('updateConfig changes trigger behavior', () => {
+    const alertCb = vi.fn()
+    analyzer.setAlertCallback(alertCb)
+    analyzer.updateConfig({ triggerTime: 0.1 })
+
     const head = makeHead(200, 200, 150, 200)
     const hand = makeHand(200, 200)
 
-    // Set very short trigger time
-    analyzer.updateConfig({ triggerTime: 0.1 })
-
     vi.setSystemTime(new Date(1000))
-    analyzer.update([hand], head)
+    confirmNear(analyzer, [hand], head)
 
-    vi.setSystemTime(new Date(1200)) // 200ms > 100ms triggerTime
-    const alertCb = vi.fn()
-    analyzer.setAlertCallback(alertCb)
+    vi.setSystemTime(new Date(1200))
     analyzer.update([hand], head)
     expect(alertCb).toHaveBeenCalled()
   })
 
   it('sensitivity affects detection radius', () => {
     const head = makeHead(200, 200, 100, 120)
-    // Place hand at a point between low and high sensitivity ranges
-    // radiusX at sens=0: (50)*0.8 = 40, at sens=1: (50)*1.5 = 75
-    // dx = 70: outside at sens=0 (70>40) but inside at sens=1 (70<75)
-    const handEdge = makeHand(270, 200)
+    const handEdge = makeHand(245, 200)
 
-    // Low sensitivity — should NOT detect (dx=70 > radiusX=40)
     analyzer.updateConfig({ sensitivity: 0.0 })
-    const info1 = analyzer.update([handEdge], head)
-    expect(info1.isNearHead).toBe(false)
+    expect(analyzer.update([handEdge], head).isNearHead).toBe(false)
 
-    // High sensitivity — should detect (dx=70 < radiusX=75)
     analyzer.reset()
     analyzer.updateConfig({ sensitivity: 1.0 })
-    const info2 = analyzer.update([handEdge], head)
-    expect(info2.isNearHead).toBe(true)
+    expect(confirmNear(analyzer, [handEdge], head).isNearHead).toBe(true)
+  })
+
+  it('detects paired zones on either side instead of only the midpoint', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+    expect(confirmNear(analyzer, [makeHand(face.leftEye.x, face.leftEye.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'eyes',
+    }))
+
+    analyzer.reset()
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+    expect(confirmNear(analyzer, [makeHand(face.rightEye.x, face.rightEye.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'eyes',
+    }))
+
+    analyzer.reset()
+    analyzer.updateConfig({ enabledZones: ['cheeks'] })
+    expect(confirmNear(analyzer, [makeHand(face.leftCheek.x, face.leftCheek.y)], head, face)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'cheeks',
+    }))
+  })
+
+  it('detects non-fingertip hand landmarks for specific zones only', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+    analyzer.updateConfig({ enabledZones: ['cheeks'] })
+
+    const hand = makeHandWithLandmark(7, face.leftCheek)
+    const info = confirmNear(analyzer, [hand], head, face)
+
+    expect(info.isNearHead).toBe(true)
+    expect(info.activeZone).toBe('cheeks')
+  })
+
+  it('ignores low-confidence contacts', () => {
+    const head = makeHead(200, 220, 200, 240)
+    const face = makeFaceLandmarks()
+    const hand = makeHand(face.leftEye.x, face.leftEye.y, 0.1)
+    analyzer.updateConfig({ enabledZones: ['eyes'] })
+
+    expect(analyzer.update([hand], head, face).isNearHead).toBe(false)
+  })
+
+  it('keeps detecting through brief missing-frame jitter', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const hand = makeHand(200, 200)
+
+    expect(confirmNear(analyzer, [hand], head).state).toBe('DETECTING')
+
+    expect(analyzer.update([], null).state).toBe('DETECTING')
+    expect(analyzer.update([], null).state).toBe('DETECTING')
+    expect(analyzer.update([], null).state).toBe('IDLE')
+  })
+
+  it('fullFace ignores wrist and palm-only phantom points', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const hand = makeHandWithLandmark(5, head.center)
+    hand.landmarks[0] = head.center
+    hand.wrist = head.center
+
+    expect(analyzer.update([hand], head).isNearHead).toBe(false)
+    expect(analyzer.update([hand], head).isNearHead).toBe(false)
+  })
+
+  it('real fingertip-to-face contact still triggers fullFace', () => {
+    const head = makeHead(200, 200, 150, 200)
+    const hand = makeHand(200, 200)
+
+    expect(confirmNear(analyzer, [hand], head)).toEqual(expect.objectContaining({
+      isNearHead: true,
+      activeZone: 'fullFace',
+    }))
   })
 })

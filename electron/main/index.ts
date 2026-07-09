@@ -13,12 +13,28 @@ interface AppSettings {
   autoStart: boolean
   minimizeToTray: boolean
   startMinimized: boolean
+  hidePreview: boolean
+  closeAction: 'ask' | 'quit' | 'tray'
+  alertSoundId: string
+  alertVolume: number
+  rightRailCollapsed: boolean
+  alertTimeoutDefaultMinutes: 5 | 10 | 15 | 30 | 45 | 60
+  cameraQuality: 'balanced' | 'high' | 'maximum'
+  detectionDebugHud: boolean
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   autoStart: false,
   minimizeToTray: true,
   startMinimized: false,
+  hidePreview: false,
+  closeAction: 'ask',
+  alertSoundId: 'tone-chime',
+  alertVolume: 0.5,
+  rightRailCollapsed: false,
+  alertTimeoutDefaultMinutes: 15,
+  cameraQuality: 'high',
+  detectionDebugHud: false,
 }
 
 const APP_SETTINGS_FILE = path.join(app.getPath('userData'), 'app-settings.json')
@@ -32,11 +48,7 @@ function loadAppSettings(): AppSettings {
       // must not leave fields undefined, which would silently break the
       // close/minimize-to-tray behavior that branches on these booleans.
       if (parsed && typeof parsed === 'object') {
-        return {
-          autoStart: Boolean(parsed.autoStart ?? DEFAULT_APP_SETTINGS.autoStart),
-          minimizeToTray: Boolean(parsed.minimizeToTray ?? DEFAULT_APP_SETTINGS.minimizeToTray),
-          startMinimized: Boolean(parsed.startMinimized ?? DEFAULT_APP_SETTINGS.startMinimized),
-        }
+        return coerceAppSettings(parsed)
       }
     }
   } catch (err) {
@@ -54,6 +66,47 @@ function saveAppSettings(settings: AppSettings): void {
 }
 
 let appSettings = loadAppSettings()
+
+function isCloseAction(value: unknown): value is AppSettings['closeAction'] {
+  return value === 'ask' || value === 'quit' || value === 'tray'
+}
+
+function isAlertTimeoutDefaultMinutes(value: unknown): value is AppSettings['alertTimeoutDefaultMinutes'] {
+  return value === 5 || value === 10 || value === 15 || value === 30 || value === 45 || value === 60
+}
+
+function isCameraQuality(value: unknown): value is AppSettings['cameraQuality'] {
+  return value === 'balanced' || value === 'high' || value === 'maximum'
+}
+
+function coerceVolume(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : DEFAULT_APP_SETTINGS.alertVolume
+}
+
+function coerceAppSettings(value: unknown): AppSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_APP_SETTINGS }
+  const parsed = value as Partial<AppSettings>
+
+  return {
+    autoStart: Boolean(parsed.autoStart ?? DEFAULT_APP_SETTINGS.autoStart),
+    minimizeToTray: Boolean(parsed.minimizeToTray ?? DEFAULT_APP_SETTINGS.minimizeToTray),
+    startMinimized: Boolean(parsed.startMinimized ?? DEFAULT_APP_SETTINGS.startMinimized),
+    hidePreview: Boolean(parsed.hidePreview ?? DEFAULT_APP_SETTINGS.hidePreview),
+    closeAction: isCloseAction(parsed.closeAction) ? parsed.closeAction : DEFAULT_APP_SETTINGS.closeAction,
+    alertSoundId: typeof parsed.alertSoundId === 'string' ? parsed.alertSoundId : DEFAULT_APP_SETTINGS.alertSoundId,
+    alertVolume: coerceVolume(parsed.alertVolume),
+    rightRailCollapsed: Boolean(parsed.rightRailCollapsed ?? DEFAULT_APP_SETTINGS.rightRailCollapsed),
+    alertTimeoutDefaultMinutes: isAlertTimeoutDefaultMinutes(parsed.alertTimeoutDefaultMinutes)
+      ? parsed.alertTimeoutDefaultMinutes
+      : DEFAULT_APP_SETTINGS.alertTimeoutDefaultMinutes,
+    cameraQuality: isCameraQuality(parsed.cameraQuality)
+      ? parsed.cameraQuality
+      : DEFAULT_APP_SETTINGS.cameraQuality,
+    detectionDebugHud: Boolean(parsed.detectionDebugHud ?? DEFAULT_APP_SETTINGS.detectionDebugHud),
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -92,6 +145,7 @@ let win: BrowserWindow | null = null
 let alertWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let alertShowRequestId = 0
 
 // URL validation for external links
 function isValidExternalUrl(url: string): boolean {
@@ -288,11 +342,17 @@ async function createWindow() {
 
 // IPC Handlers for fullscreen alert
 ipcMain.handle('show-fullscreen-alert', (_, data) => {
+  const showRequestId = ++alertShowRequestId
+
   if (!alertWindow) {
     createAlertWindow()
   }
 
   const sendDataAndShow = () => {
+    if (showRequestId !== alertShowRequestId || !alertWindow) {
+      return
+    }
+
     // Ensure window covers entire screen including taskbar
     const primaryDisplay = screen.getPrimaryDisplay()
     const { bounds } = primaryDisplay
@@ -314,6 +374,8 @@ ipcMain.handle('show-fullscreen-alert', (_, data) => {
 })
 
 ipcMain.handle('hide-fullscreen-alert', () => {
+  alertShowRequestId++
+
   if (alertWindow) {
     alertWindow.hide()
   }
@@ -354,13 +416,13 @@ ipcMain.handle('get-app-settings', () => {
 })
 
 ipcMain.handle('set-app-settings', (_, settings: AppSettings) => {
-  appSettings = settings
-  saveAppSettings(settings)
+  appSettings = coerceAppSettings(settings)
+  saveAppSettings(appSettings)
 
   // Update auto-start setting
   app.setLoginItemSettings({
-    openAtLogin: settings.autoStart,
-    openAsHidden: settings.startMinimized,
+    openAtLogin: appSettings.autoStart,
+    openAsHidden: appSettings.startMinimized,
   })
 
   return true

@@ -34,6 +34,7 @@ function clampVolume(v: number): number {
 
 export class AlertSoundService {
   private opts: AlertSoundServiceOptions
+  private currentAudio: HTMLAudioElement | null = null
 
   constructor(opts: AlertSoundServiceOptions) {
     this.opts = opts
@@ -54,10 +55,20 @@ export class AlertSoundService {
   async play(id: string, volume: number): Promise<void> {
     const url = await this.resolveUrl(id)
     const audio = new Audio(url)
+    this.stop()
+    this.currentAudio = audio
     audio.volume = clampVolume(volume)
+    audio.addEventListener('ended', () => {
+      if (this.currentAudio === audio) {
+        this.currentAudio = null
+      }
+    }, { once: true })
     try {
       await audio.play()
     } catch (err) {
+      if (this.currentAudio === audio) {
+        this.currentAudio = null
+      }
       logger.warn(`AlertSoundService: playback failed for "${id}", using sine fallback`, err)
       ;(this.opts.sineFallback ?? defaultSineFallback)()
     }
@@ -65,5 +76,12 @@ export class AlertSoundService {
 
   async preview(id: string, volume: number): Promise<void> {
     return this.play(id, volume)
+  }
+
+  stop(): void {
+    if (!this.currentAudio) return
+    this.currentAudio.pause()
+    this.currentAudio.currentTime = 0
+    this.currentAudio = null
   }
 }

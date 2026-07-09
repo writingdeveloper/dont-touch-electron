@@ -129,6 +129,7 @@ const safeDOM = {
  */
 function useLoading() {
   const className = `loaders-css__square-spin`
+  let loadingRemoved = false
   const styleContent = `
 @keyframes square-spin {
   25% { transform: perspective(100px) rotateX(180deg) rotateY(0); }
@@ -166,10 +167,14 @@ function useLoading() {
 
   return {
     appendLoading() {
+      if (loadingRemoved) {
+        return
+      }
       safeDOM.append(document.head, oStyle)
       safeDOM.append(document.body, oDiv)
     },
     removeLoading() {
+      loadingRemoved = true
       safeDOM.remove(document.head, oStyle)
       safeDOM.remove(document.body, oDiv)
     },
@@ -181,8 +186,8 @@ function useLoading() {
 const { appendLoading, removeLoading } = useLoading()
 domReady().then(appendLoading)
 
-window.onmessage = (ev) => {
-  ev.data.payload === 'removeLoading' && removeLoading()
-}
+window.addEventListener('message', (ev) => {
+  ev.data?.payload === 'removeLoading' && removeLoading()
+})
 
 setTimeout(removeLoading, 4999)

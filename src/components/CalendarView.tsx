@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { DailyStats, HabitSettings, dateToLocalString } from '../types/statistics'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 interface CalendarViewProps {
   getMonthlyStats: (year: number, month: number) => Map<string, DailyStats>
@@ -14,6 +15,16 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const calendarModalRef = useFocusTrap()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   // Get weekday names based on language
   const weekDays = useMemo(() => {
@@ -105,17 +116,41 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
     return 'bad'
   }
 
+  const getDateLabel = (dayInfo: { date: string | null; day: number; stats: DailyStats | null; isToday: boolean; isFuture: boolean }) => {
+    if (!dayInfo.date) return ''
+    const status = getStatusColor(dayInfo.stats, dayInfo.isFuture)
+    const touches = dayInfo.stats?.touchCount ?? 0
+    const parts = [
+      dayInfo.isToday ? t.calendarToday : dayInfo.date,
+      `${touches} ${t.statsTodayTouches}`,
+      status === 'future' ? 'Future date' : status === 'good' ? t.calendarGood : status === 'warning' ? t.calendarWarning : status === 'bad' ? t.calendarBad : t.calendarNoData,
+    ]
+    return parts.filter(Boolean).join(', ')
+  }
+
   return (
     <div className="calendar-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title">
-      <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="calendar-header" id="calendar-modal-title">
-          <button className="nav-btn" onClick={goToPrevMonth}>&lt;</button>
+      <div className="calendar-modal" ref={calendarModalRef} onClick={(e) => e.stopPropagation()}>
+        <div className="calendar-header">
+          <button type="button" className="calendar-nav-btn" onClick={goToPrevMonth} aria-label={t.calendarPreviousMonth}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
           <div className="month-title">
-            <span>{monthName}</span>
+            <span id="calendar-modal-title">{monthName}</span>
             <button className="today-btn" onClick={goToToday}>{t.calendarToday || 'Today'}</button>
           </div>
-          <button className="nav-btn" onClick={goToNextMonth}>&gt;</button>
-          <button className="close-btn" onClick={onClose}>&times;</button>
+          <button type="button" className="calendar-nav-btn" onClick={goToNextMonth} aria-label={t.calendarNextMonth}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+          <button type="button" className="calendar-close-btn" onClick={onClose} aria-label={t.calendarClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <div className="calendar-grid">
@@ -125,22 +160,30 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           ))}
 
           {/* Calendar days */}
-          {calendarDays.map((dayInfo, i) => (
-            <div
-              key={i}
-              className={`calendar-day ${dayInfo.date ? 'has-date' : 'empty'} ${dayInfo.isToday ? 'today' : ''} ${selectedDate === dayInfo.date ? 'selected' : ''} status-${getStatusColor(dayInfo.stats, dayInfo.isFuture)}`}
-              onClick={() => dayInfo.date && !dayInfo.isFuture && setSelectedDate(dayInfo.date)}
-            >
-              {dayInfo.day > 0 && (
-                <>
-                  <span className="day-number">{dayInfo.day}</span>
-                  {dayInfo.stats && dayInfo.stats.touchCount > 0 && (
-                    <span className="touch-count">{dayInfo.stats.touchCount}</span>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
+          {calendarDays.map((dayInfo, i) => {
+            const dayClassName = `calendar-day ${dayInfo.date ? 'has-date' : 'empty'} ${dayInfo.isToday ? 'today' : ''} ${selectedDate === dayInfo.date ? 'selected' : ''} status-${getStatusColor(dayInfo.stats, dayInfo.isFuture)}`
+
+            if (!dayInfo.date) {
+              return <div key={i} className={dayClassName} aria-hidden="true" />
+            }
+
+            return (
+              <button
+                key={dayInfo.date}
+                type="button"
+                className={dayClassName}
+                disabled={dayInfo.isFuture}
+                aria-label={getDateLabel(dayInfo)}
+                aria-pressed={selectedDate === dayInfo.date}
+                onClick={() => setSelectedDate(dayInfo.date)}
+              >
+                <span className="day-number">{dayInfo.day}</span>
+                {dayInfo.stats && dayInfo.stats.touchCount > 0 && (
+                  <span className="touch-count">{dayInfo.stats.touchCount}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* Selected date details */}
@@ -202,89 +245,95 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 1000;
+          z-index: var(--z-modal-backdrop);
           backdrop-filter: blur(4px);
+          animation: calendarBackdropIn var(--motion-standard) var(--motion-ease);
         }
 
         .calendar-modal {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          border: 1px solid rgba(0, 255, 255, 0.2);
-          border-radius: 16px;
+          background: #1b1c25;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 8px;
           padding: 20px;
-          min-width: 360px;
-          max-width: 420px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+          width: min(420px, calc(100vw - 32px));
+          box-shadow: 0 8px 8px rgba(0, 0, 0, 0.35);
+          animation: calendarModalIn var(--motion-standard) var(--motion-ease);
         }
 
         .calendar-header {
-          display: flex;
+          display: grid;
+          grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
           align-items: center;
-          justify-content: space-between;
+          gap: 8px;
           margin-bottom: 16px;
-          position: relative;
         }
 
         .month-title {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 12px;
+          min-width: 0;
           font-size: 18px;
           font-weight: 600;
-          color: #00ffff;
+          color: #e5e7eb;
+        }
+
+        .month-title span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .today-btn {
           padding: 4px 10px;
           font-size: 11px;
-          background: rgba(0, 255, 255, 0.1);
-          border: 1px solid rgba(0, 255, 255, 0.3);
+          background: rgba(125, 211, 252, 0.1);
+          border: 1px solid rgba(125, 211, 252, 0.3);
           border-radius: 12px;
-          color: #00ffff;
+          color: #7dd3fc;
           cursor: pointer;
-          transition: all 0.2s;
+          flex: 0 0 auto;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            border-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease);
         }
 
         .today-btn:hover {
-          background: rgba(0, 255, 255, 0.2);
+          background: rgba(125, 211, 252, 0.16);
         }
 
-        .nav-btn {
-          padding: 8px 14px;
+        .calendar-nav-btn,
+        .calendar-close-btn {
+          width: 44px;
+          height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           color: #ccc;
           cursor: pointer;
-          font-size: 16px;
-          transition: all 0.2s;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            border-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
         }
 
-        .nav-btn:hover {
-          background: rgba(0, 255, 255, 0.1);
-          border-color: rgba(0, 255, 255, 0.3);
-          color: #00ffff;
+        .calendar-nav-btn:hover,
+        .calendar-close-btn:hover {
+          background: rgba(125, 211, 252, 0.08);
+          border-color: rgba(125, 211, 252, 0.28);
+          color: #7dd3fc;
         }
 
-        .close-btn {
-          position: absolute;
-          top: 0;
-          right: 0;
-          width: 32px;
-          height: 32px;
-          background: rgba(255, 68, 68, 0.2);
-          border: 1px solid rgba(255, 68, 68, 0.4);
-          border-radius: 50%;
-          color: #ff4444;
-          font-size: 20px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s;
-        }
-
-        .close-btn:hover {
-          background: rgba(255, 68, 68, 0.4);
+        .calendar-nav-btn:active,
+        .calendar-close-btn:active {
+          transform: translateY(1px);
         }
 
         .calendar-grid {
@@ -296,7 +345,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
         .weekday-header {
           text-align: center;
           font-size: 11px;
-          color: #666;
+          color: #94a3b8;
           padding: 8px 0;
           text-transform: uppercase;
         }
@@ -310,7 +359,13 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           border-radius: 8px;
           font-size: 14px;
           position: relative;
-          transition: all 0.2s;
+          transition:
+            background-color var(--motion-fast) var(--motion-ease),
+            border-color var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
+          border: none;
+          color: inherit;
         }
 
         .calendar-day.has-date {
@@ -319,19 +374,20 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
         }
 
         .calendar-day.has-date:hover {
-          background: rgba(0, 255, 255, 0.1);
+          background: rgba(125, 211, 252, 0.08);
+          transform: translateY(-1px);
         }
 
         .calendar-day.today {
-          border: 2px solid #00ffff;
+          border: 2px solid #7dd3fc;
         }
 
         .calendar-day.selected {
-          background: rgba(0, 255, 255, 0.2) !important;
+          background: rgba(125, 211, 252, 0.18) !important;
         }
 
         .calendar-day.status-good {
-          background: rgba(0, 255, 136, 0.15);
+          background: rgba(52, 211, 153, 0.14);
         }
 
         .calendar-day.status-warning {
@@ -348,7 +404,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
         }
 
         .calendar-day.status-none {
-          color: #666;
+          color: #94a3b8;
         }
 
         .day-number {
@@ -361,7 +417,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           margin-top: 2px;
         }
 
-        .calendar-day.status-good .touch-count { color: #00ff88; }
+        .calendar-day.status-good .touch-count { color: #86efac; }
         .calendar-day.status-warning .touch-count { color: #ffbb44; }
         .calendar-day.status-bad .touch-count { color: #ff4444; }
 
@@ -376,7 +432,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
         .day-details h4 {
           margin: 0 0 12px 0;
           font-size: 14px;
-          color: #00ffff;
+          color: #7dd3fc;
         }
 
         .details-grid {
@@ -392,7 +448,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
         .detail-label {
           display: block;
           font-size: 10px;
-          color: #666;
+          color: #94a3b8;
           text-transform: uppercase;
           margin-bottom: 4px;
         }
@@ -403,12 +459,12 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           color: #fff;
         }
 
-        .detail-value.good { color: #00ff88; }
+        .detail-value.good { color: #86efac; }
         .detail-value.bad { color: #ff4444; }
-        .detail-value.meditation { color: #bb86fc; font-size: 16px; }
+        .detail-value.meditation { color: #7dd3fc; font-size: 16px; }
 
         .no-data {
-          color: #666;
+          color: #94a3b8;
           text-align: center;
           font-size: 13px;
           margin: 0;
@@ -428,7 +484,7 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           align-items: center;
           gap: 6px;
           font-size: 11px;
-          color: #888;
+          color: #94a3b8;
         }
 
         .legend-dot {
@@ -437,9 +493,61 @@ export function CalendarView({ getMonthlyStats, settings, onClose }: CalendarVie
           border-radius: 50%;
         }
 
-        .legend-dot.good { background: #00ff88; }
+        .legend-dot.good { background: #34d399; }
         .legend-dot.warning { background: #ffbb44; }
         .legend-dot.bad { background: #ff4444; }
+
+        @keyframes calendarBackdropIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes calendarModalIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.98);
+            filter: blur(3px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+          }
+        }
+
+        @media (max-width: 460px) {
+          .calendar-modal {
+            padding: 16px;
+          }
+
+          .calendar-header {
+            grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+          }
+
+          .calendar-nav-btn,
+          .calendar-close-btn {
+            width: 40px;
+            height: 40px;
+          }
+
+          .month-title {
+            gap: 8px;
+            font-size: 16px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .calendar-overlay,
+          .calendar-modal {
+            animation: none;
+          }
+
+          .calendar-day.has-date:hover,
+          .calendar-nav-btn:active,
+          .calendar-close-btn:active {
+            transform: none;
+          }
+        }
       `}</style>
     </div>
   )

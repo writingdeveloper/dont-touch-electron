@@ -3,6 +3,7 @@ import { MediaPipeDetector } from '../detection/MediaPipeDetector'
 import { ProximityAnalyzer, ProximityInfo } from '../detection/ProximityAnalyzer'
 import { DetectionState, DetectionZone, DEFAULT_ENABLED_ZONES, ALL_SPECIFIC_ZONES } from '../detection/types'
 import { logger } from '../utils/logger'
+import { RecoveryIssue, classifyModelError } from '../utils/recovery'
 
 interface UseDetectionOptions {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -19,7 +20,7 @@ export interface DetectionConfig {
 
 interface UseDetectionReturn {
   isModelLoaded: boolean
-  modelError: string | null
+  modelError: RecoveryIssue | null
   detectionState: DetectionState
   isNearHead: boolean
   progress: number
@@ -29,6 +30,7 @@ interface UseDetectionReturn {
   handsCount: number
   startDetection: () => void
   stopDetection: () => void
+  retryModelLoad: () => void
   isHandNearHead: () => boolean
   updateConfig: (config: Partial<DetectionConfig>) => void
 }
@@ -51,7 +53,7 @@ export function useDetection({
   const [progress, setProgress] = useState(0)
   const [activeZone, setActiveZone] = useState<DetectionZone | null>(null)
   const [config, setConfig] = useState<DetectionConfig>(DEFAULT_CONFIG)
-  const [modelError, setModelError] = useState<string | null>(null)
+  const [modelError, setModelError] = useState<RecoveryIssue | null>(null)
   const [faceLandmarksCount, setFaceLandmarksCount] = useState<number | null>(null)
   const [handsCount, setHandsCount] = useState(0)
 
@@ -61,48 +63,50 @@ export function useDetection({
   const isRunningRef = useRef(false)
   const onAlertRef = useRef(onAlert)
   const isInitializedRef = useRef(false)
+  const lastVideoTimeRef = useRef(-1)
 
   // Keep onAlert ref updated
   useEffect(() => {
     onAlertRef.current = onAlert
   }, [onAlert])
 
-  // Initialize detector and analyzer (only once)
-  useEffect(() => {
+  const initializeModel = useCallback(async () => {
     if (isInitializedRef.current) return
     isInitializedRef.current = true
+    setModelError(null)
 
-    async function init() {
-      try {
-        detectorRef.current = new MediaPipeDetector()
-        await detectorRef.current.loadModel()
+    try {
+      detectorRef.current = new MediaPipeDetector()
+      await detectorRef.current.loadModel()
 
-        analyzerRef.current = new ProximityAnalyzer(DEFAULT_CONFIG)
+      analyzerRef.current = new ProximityAnalyzer(DEFAULT_CONFIG)
 
-        analyzerRef.current.setAlertCallback(() => {
-          onAlertRef.current()
-        })
+      analyzerRef.current.setAlertCallback(() => {
+        onAlertRef.current()
+      })
 
-        analyzerRef.current.setStateCallback((state) => {
-          setDetectionState(state)
-        })
+      analyzerRef.current.setStateCallback((state) => {
+        setDetectionState(state)
+      })
 
-        analyzerRef.current.setProximityCallback((info: ProximityInfo) => {
-          setIsNearHead(info.isNearHead)
-          setProgress(info.progress)
-          setActiveZone(info.activeZone)
-        })
+      analyzerRef.current.setProximityCallback((info: ProximityInfo) => {
+        setIsNearHead(info.isNearHead)
+        setProgress(info.progress)
+        setActiveZone(info.activeZone)
+      })
 
-        setIsModelLoaded(true)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error loading model'
-        logger.error('Failed to load detection model:', err)
-        setModelError(message)
-        isInitializedRef.current = false
-      }
+      setIsModelLoaded(true)
+    } catch (err) {
+      logger.error('Failed to load detection model:', err)
+      setIsModelLoaded(false)
+      setModelError(classifyModelError(err))
+      isInitializedRef.current = false
     }
+  }, [])
 
-    init()
+  // Initialize detector and analyzer (only once)
+  useEffect(() => {
+    void initializeModel()
 
     return () => {
       detectorRef.current?.dispose()
@@ -111,7 +115,17 @@ export function useDetection({
       analyzerRef.current = null
       isInitializedRef.current = false
     }
-  }, [])
+  }, [initializeModel])
+
+  const retryModelLoad = useCallback(() => {
+    detectorRef.current?.dispose()
+    detectorRef.current = null
+    analyzerRef.current?.reset()
+    analyzerRef.current = null
+    setIsModelLoaded(false)
+    isInitializedRef.current = false
+    void initializeModel()
+  }, [initializeModel])
 
   const updateConfig = useCallback((newConfig: Partial<DetectionConfig>) => {
     setConfig(prev => {
@@ -149,6 +163,12 @@ export function useDetection({
       return
     }
 
+    if (video.currentTime === lastVideoTimeRef.current) {
+      detectionTimerRef.current = setTimeout(runDetection, 16)
+      return
+    }
+    lastVideoTimeRef.current = video.currentTime
+
     try {
       const results = await detector.detect(video)
 
@@ -162,8 +182,8 @@ export function useDetection({
       // Draw results on canvas
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         detector.drawResults(ctx, results, proximityInfo.isNearHead)
       }
@@ -177,6 +197,7 @@ export function useDetection({
   }, [videoRef, canvasRef])
 
   const startDetection = useCallback(() => {
+    if (isRunningRef.current) return
     isRunningRef.current = true
     runDetection()
   }, [runDetection])
@@ -193,6 +214,7 @@ export function useDetection({
     setActiveZone(null)
     setFaceLandmarksCount(null)
     setHandsCount(0)
+    lastVideoTimeRef.current = -1
     analyzerRef.current?.reset()
 
     // Clear canvas
@@ -221,6 +243,7 @@ export function useDetection({
     handsCount,
     startDetection,
     stopDetection,
+    retryModelLoad,
     isHandNearHead,
     updateConfig,
   }

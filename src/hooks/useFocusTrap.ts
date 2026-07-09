@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 
-export function useFocusTrap() {
+export function useFocusTrap(active = true) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!active) return
+
     const container = containerRef.current
     if (!container) return
 
@@ -49,7 +51,7 @@ export function useFocusTrap() {
       container.removeEventListener('keydown', handleKeyDown)
       previouslyFocused?.focus()
     }
-  }, [])
+  }, [active])
 
   return containerRef
 }
